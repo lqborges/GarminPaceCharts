@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Overridden at build time by resValue in app/build.gradle.kts -->
+    <string name="app_name">Garmin Pace</string>
+</resources>

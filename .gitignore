@@ -1,0 +1,17 @@
+# Build outputs
+.gradle/
+.kotlin/
+build/
+app/build/
+local.properties
+*.iml
+.idea/
+.DS_Store
+captures/
+.externalNativeBuild/
+.cxx/
+
+# APK distribution (upload via rclone — never commit)
+artifacts/*.apk
+artifacts/*.zip
+artifacts/garmin_tokens.zip
