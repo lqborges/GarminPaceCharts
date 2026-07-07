@@ -155,6 +155,7 @@ class MainActivity : ComponentActivity() {
                                 chartData = chartData,
                                 chartRange = chartRange,
                                 workouts = workouts,
+                                stats = dashboardStats,
                                 onRangeSelected = viewModel::setChartRange,
                                 onWorkoutSelected = { workout ->
                                     navController.navigate(Routes.workoutDetail(workout.id))

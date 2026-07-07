@@ -18,8 +18,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.lqborges.garminpacecharts.ChartRange
+import com.lqborges.garminpacecharts.domain.ChartDataBuilder
 import com.lqborges.garminpacecharts.domain.PaceFormatter
 import com.lqborges.garminpacecharts.domain.model.ChartData
+import com.lqborges.garminpacecharts.domain.model.DashboardStats
 import com.lqborges.garminpacecharts.domain.model.Workout
 import com.lqborges.garminpacecharts.ui.components.PaceChart
 
@@ -28,6 +30,7 @@ fun ChartsScreen(
     chartData: ChartData?,
     chartRange: ChartRange,
     workouts: List<Workout>,
+    stats: DashboardStats?,
     onRangeSelected: (ChartRange) -> Unit,
     onWorkoutSelected: (Workout) -> Unit,
 ) {
@@ -57,6 +60,26 @@ fun ChartsScreen(
                             )
                         },
                     )
+                }
+            }
+        }
+        item {
+            stats?.let {
+                if (it.consecutiveWeekStreak > 0 || it.weeklyPaceRank != null) {
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            if (it.consecutiveWeekStreak > 0) {
+                                val weekLabel = if (it.consecutiveWeekStreak == 1) "week" else "weeks"
+                                Text("Streak: ${it.consecutiveWeekStreak} consecutive $weekLabel with workouts")
+                            }
+                            it.weeklyPaceRank?.let { rank ->
+                                Text(
+                                    "Current week vs all-time: ${ChartDataBuilder.formatWeeklyPaceRank(rank)}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }

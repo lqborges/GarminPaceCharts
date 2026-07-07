@@ -6,9 +6,12 @@ import com.lqborges.garminpacecharts.domain.model.ChartAxisMarker
 import com.lqborges.garminpacecharts.domain.model.ChartData
 import com.lqborges.garminpacecharts.domain.model.ChartMonthSpan
 import com.lqborges.garminpacecharts.domain.model.WeekBucket
+import com.lqborges.garminpacecharts.domain.model.WeeklyPaceRank
 import com.lqborges.garminpacecharts.domain.model.Workout
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.Month
+import java.time.temporal.IsoFields
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
@@ -102,6 +105,73 @@ object ChartDataBuilder {
         val recent = workouts.filter { it.startTimeLocal.toLocalDate() >= cutoff }
         if (recent.isEmpty()) return null
         return recent.map { it.paceMinPerKm }.average()
+    }
+
+    fun anchorWeekKey(workouts: List<Workout>, now: LocalDateTime = LocalDateTime.now()): Pair<Int, Int>? {
+        if (workouts.isEmpty()) return null
+        val current = weekKey(now)
+        val weeksWithWorkouts = workouts.map { weekKey(it.startTimeLocal) }.toSet()
+        return if (current in weeksWithWorkouts) {
+            current
+        } else {
+            weekKey(workouts.maxBy { it.startTimeLocal }.startTimeLocal)
+        }
+    }
+
+    fun consecutiveWeekStreak(workouts: List<Workout>, now: LocalDateTime = LocalDateTime.now()): Int {
+        if (workouts.isEmpty()) return 0
+        val weeksWithWorkouts = workouts.map { weekKey(it.startTimeLocal) }.toSet()
+        var current = anchorWeekKey(workouts, now) ?: return 0
+        var streak = 0
+        while (current in weeksWithWorkouts) {
+            streak++
+            current = previousWeekKey(current)
+        }
+        return streak
+    }
+
+    fun currentWeekAveragePace(workouts: List<Workout>, now: LocalDateTime = LocalDateTime.now()): Double? {
+        val anchor = anchorWeekKey(workouts, now) ?: return null
+        val weekWorkouts = workouts.filter { weekKey(it.startTimeLocal) == anchor }
+        if (weekWorkouts.isEmpty()) return null
+        return weekWorkouts.map { it.paceMinPerKm }.average()
+    }
+
+    fun weeklyPaceRank(workouts: List<Workout>, now: LocalDateTime = LocalDateTime.now()): WeeklyPaceRank? {
+        val currentPace = currentWeekAveragePace(workouts, now) ?: return null
+        val weeklyAverages = workouts
+            .groupBy { weekKey(it.startTimeLocal) }
+            .values
+            .map { week -> week.map { it.paceMinPerKm }.average() }
+        val totalWeeks = weeklyAverages.size
+        if (totalWeeks == 0) return null
+        val rank = weeklyAverages.count { it < currentPace } + 1
+        return WeeklyPaceRank(pace = currentPace, rank = rank, totalWeeks = totalWeeks)
+    }
+
+    fun previousWeekKey(key: Pair<Int, Int>): Pair<Int, Int> {
+        val (year, week) = key
+        val date = LocalDate.of(year, 1, 4)
+            .with(IsoFields.WEEK_BASED_YEAR, year.toLong())
+            .with(IsoFields.WEEK_OF_WEEK_BASED_YEAR, week.toLong())
+            .minusWeeks(1)
+        return weekKey(date.atStartOfDay())
+    }
+
+    fun formatWeeklyPaceRank(rank: WeeklyPaceRank): String {
+        val pace = PaceFormatter.toDisplay(rank.pace)
+        return when (rank.rank) {
+            1 -> "$pace min/km — fastest of ${rank.totalWeeks} weeks"
+            else -> "$pace min/km — ${ordinal(rank.rank)} of ${rank.totalWeeks} weekly averages (top ${rank.topPercent}%)"
+        }
+    }
+
+    fun ordinal(n: Int): String = when {
+        n % 100 in 11..13 -> "${n}th"
+        n % 10 == 1 -> "${n}st"
+        n % 10 == 2 -> "${n}nd"
+        n % 10 == 3 -> "${n}rd"
+        else -> "${n}th"
     }
 
     fun previousFourWeekAveragePace(workouts: List<Workout>, now: LocalDateTime = LocalDateTime.now()): Double? {

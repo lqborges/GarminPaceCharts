@@ -66,6 +66,9 @@ class WorkoutRepository(
                 latestPace = latest?.paceMinPerKm,
                 fourWeekTrend = trend,
                 fourWeekAveragePace = recentAvg,
+                consecutiveWeekStreak = ChartDataBuilder.consecutiveWeekStreak(workouts),
+                currentWeekAveragePace = ChartDataBuilder.currentWeekAveragePace(workouts),
+                weeklyPaceRank = ChartDataBuilder.weeklyPaceRank(workouts),
                 garminConnected = garminConnected,
                 lastRefreshAt = lastRefresh?.let { Instant.ofEpochMilli(it) },
             )

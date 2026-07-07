@@ -236,6 +236,45 @@ class ChartDataBuilderTest {
     }
 
     @Test
+    fun consecutiveWeekStreak_countsBackwardFromLatestActiveWeek() {
+        val now = LocalDateTime.parse("2026-07-07T08:00:00")
+        val workouts = listOf(
+            workout("2026-06-16T08:00:00", 6.0),
+            workout("2026-06-23T08:00:00", 6.1),
+            workout("2026-06-30T08:00:00", 6.2),
+            workout("2026-07-05T07:23:05", 7.88),
+        )
+        assertEquals(3, ChartDataBuilder.consecutiveWeekStreak(workouts, now))
+    }
+
+    @Test
+    fun consecutiveWeekStreak_breaksOnMissingWeek() {
+        val now = LocalDateTime.parse("2026-07-07T08:00:00")
+        val workouts = listOf(
+            workout("2026-06-16T08:00:00", 6.0),
+            workout("2026-07-05T07:23:05", 7.88),
+        )
+        assertEquals(1, ChartDataBuilder.consecutiveWeekStreak(workouts, now))
+    }
+
+    @Test
+    fun weeklyPaceRank_comparesCurrentWeekAgainstAllWeeklyAverages() {
+        val now = LocalDateTime.parse("2026-07-07T08:00:00")
+        val workouts = listOf(
+            workout("2026-06-16T08:00:00", 8.0),
+            workout("2026-06-23T08:00:00", 7.0),
+            workout("2026-06-30T08:00:00", 6.0),
+            workout("2026-07-06T07:30:00", 7.0),
+            workout("2026-07-07T07:30:00", 8.0),
+        )
+        val rank = ChartDataBuilder.weeklyPaceRank(workouts, now)
+        assertNotNull(rank)
+        assertEquals(7.5, rank!!.pace, 0.01)
+        assertEquals(3, rank.rank)
+        assertEquals(4, rank.totalWeeks)
+    }
+
+    @Test
     fun weekLabelStride_increasesWhenZoomedOut() {
         assertEquals(1, ChartDataBuilder.weekLabelStride(weekWidthPx = 80f, minLabelSpacingPx = 52f))
         assertEquals(2, ChartDataBuilder.weekLabelStride(weekWidthPx = 40f, minLabelSpacingPx = 52f))

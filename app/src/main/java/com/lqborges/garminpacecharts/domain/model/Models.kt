@@ -94,12 +94,24 @@ data class ChartData(
     val showPointLabels: Boolean,
 )
 
+data class WeeklyPaceRank(
+    val pace: Double,
+    val rank: Int,
+    val totalWeeks: Int,
+) {
+    val topPercent: Int
+        get() = ((rank.toDouble() / totalWeeks.coerceAtLeast(1)) * 100).toInt().coerceIn(1, 100)
+}
+
 data class DashboardStats(
     val totalWorkouts: Int,
     val latestWorkoutDate: LocalDateTime?,
     val latestPace: Double?,
     val fourWeekTrend: TrendDirection,
     val fourWeekAveragePace: Double?,
+    val consecutiveWeekStreak: Int,
+    val currentWeekAveragePace: Double?,
+    val weeklyPaceRank: WeeklyPaceRank?,
     val garminConnected: Boolean,
     val lastRefreshAt: Instant?,
 )

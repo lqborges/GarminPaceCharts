@@ -16,6 +16,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.lqborges.garminpacecharts.domain.ChartDataBuilder
 import com.lqborges.garminpacecharts.domain.PaceFormatter
 import com.lqborges.garminpacecharts.domain.model.DashboardStats
 import com.lqborges.garminpacecharts.domain.model.HealthAssessment
@@ -42,6 +43,15 @@ fun HomeScreen(
                 Text("Latest workout: ${stats?.latestWorkoutDate ?: "—"}")
                 stats?.latestPace?.let {
                     Text("Latest pace: ${PaceFormatter.toDisplay(it)} min/km")
+                }
+                stats?.let {
+                    if (it.consecutiveWeekStreak > 0) {
+                        val weekLabel = if (it.consecutiveWeekStreak == 1) "week" else "weeks"
+                        Text("Weekly streak: ${it.consecutiveWeekStreak} consecutive $weekLabel")
+                    }
+                    it.weeklyPaceRank?.let { rank ->
+                        Text("Current week rank: ${ChartDataBuilder.formatWeeklyPaceRank(rank)}")
+                    }
                 }
                 Text("4-week trend: ${stats?.fourWeekTrend ?: "—"}")
                 Text("Garmin: ${if (stats?.garminConnected == true) "connected" else "not connected"}")
