@@ -5,8 +5,7 @@ import com.lqborges.garminpacecharts.domain.model.ChartData
 import com.lqborges.garminpacecharts.domain.model.WeekBucket
 import com.lqborges.garminpacecharts.domain.model.Workout
 import java.time.LocalDateTime
-import java.time.format.TextStyle
-import java.time.temporal.ChronoUnit
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 object ChartDataBuilder {
@@ -42,7 +41,7 @@ object ChartDataBuilder {
             WeekBucket(
                 year = key.first,
                 week = key.second,
-                label = "${latest.month.getDisplayName(TextStyle.SHORT, Locale.getDefault())} ${key.second}",
+                label = weekDateLabel(sorted),
                 month = latest.monthValue,
                 averagePace = avg,
                 workouts = sorted,
@@ -60,6 +59,20 @@ object ChartDataBuilder {
             weeks = weeks,
             showPointLabels = range == ChartRange.LAST_4_WEEKS,
         )
+    }
+
+    /** X-axis label from actual workout dates — never ISO week numbers (they read like calendar dates). */
+    fun weekDateLabel(workouts: List<Workout>): String {
+        if (workouts.isEmpty()) return ""
+        val dates = workouts.map { it.startTimeLocal.toLocalDate() }.sorted()
+        val first = dates.first()
+        val last = dates.last()
+        val monthDay = DateTimeFormatter.ofPattern("MMM d", Locale.getDefault())
+        return when {
+            dates.size == 1 || first == last -> monthDay.format(first)
+            first.month == last.month -> "${monthDay.format(first)}–${last.dayOfMonth}"
+            else -> "${monthDay.format(first)}–${monthDay.format(last)}"
+        }
     }
 
     fun weekKey(date: LocalDateTime): Pair<Int, Int> {

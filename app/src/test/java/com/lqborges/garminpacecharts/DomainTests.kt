@@ -183,13 +183,13 @@ class ChartDataBuilderTest {
             now = LocalDateTime.parse("2026-07-07T22:00:00"),
         )
         assertEquals(1, chart.weeks.size)
-        assertEquals("Jul 27", chart.weeks.single().label)
+        assertEquals("Jun 29–Jul 5", chart.weeks.single().label)
         assertEquals(2, chart.weeks.single().workouts.size)
         assertEquals(7, chart.weeks.single().month)
     }
 
     @Test
-    fun build_weekLabelUsesLatestWorkoutMonth() {
+    fun build_weekLabelShowsActualWorkoutDates() {
         val workouts = listOf(
             workout("2026-06-29T07:30:00", 7.9),
             workout("2026-07-05T07:23:05", 7.88),
@@ -199,7 +199,13 @@ class ChartDataBuilderTest {
             com.lqborges.garminpacecharts.ChartRange.ALL_TIME,
             now = LocalDateTime.parse("2026-07-07T22:00:00"),
         )
-        assertEquals("Jul 27", chart.weeks.single().label)
+        assertEquals("Jun 29–Jul 5", chart.weeks.single().label)
+    }
+
+    @Test
+    fun weekDateLabel_singleWorkoutShowsCalendarDate() {
+        val workouts = listOf(workout("2026-07-05T07:23:05", 7.88))
+        assertEquals("Jul 5", ChartDataBuilder.weekDateLabel(workouts))
     }
 
     @Test
