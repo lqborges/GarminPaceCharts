@@ -3,15 +3,12 @@ package com.lqborges.garminpacecharts.ui.components
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTransformGestures
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -34,7 +31,7 @@ import com.lqborges.garminpacecharts.domain.ChartDataBuilder
 import com.lqborges.garminpacecharts.domain.PaceFormatter
 import com.lqborges.garminpacecharts.domain.model.ChartData
 import com.lqborges.garminpacecharts.domain.model.Workout
-import kotlin.math.max
+import kotlin.math.min
 
 @Composable
 fun PaceChart(
@@ -51,7 +48,7 @@ fun PaceChart(
 
     var selectedWorkout by remember { mutableStateOf<Workout?>(null) }
     var scale by remember(chartData.title) { mutableFloatStateOf(1f) }
-    val scrollState = rememberScrollState()
+    var offsetX by remember(chartData.title) { mutableFloatStateOf(0f) }
     val density = LocalDensity.current
     val weekCount = chartData.weeks.size
 
@@ -60,16 +57,6 @@ fun PaceChart(
     }
     val minPace = allPaces.min() - 0.2
     val maxPace = allPaces.max() + 0.2
-
-    LaunchedEffect(chartData.title, weekCount) {
-        scale = 1f
-    }
-
-    LaunchedEffect(chartData.title, weekCount, scrollState.maxValue) {
-        if (scrollState.maxValue > 0) {
-            scrollState.scrollTo(scrollState.maxValue)
-        }
-    }
 
     BoxWithConstraints(
         modifier = modifier
@@ -81,99 +68,98 @@ fun PaceChart(
         val minWeekWidthPx = with(density) { 56.dp.toPx() }
         val leftPaddingPx = with(density) { 48.dp.toPx() }
         val rightPaddingPx = with(density) { 24.dp.toPx() }
-        val scaledMinWeekWidthPx = minWeekWidthPx * scale
-        val contentWidthPx = max(
-            viewportWidthPx,
-            leftPaddingPx + weekCount * scaledMinWeekWidthPx + rightPaddingPx,
-        )
-        val contentWidth = with(density) { contentWidthPx.toDp() }
+        val weekWidthPx = minWeekWidthPx * scale * 0.9f
+        val contentWidthPx = leftPaddingPx + weekCount * weekWidthPx + rightPaddingPx
+        val minOffsetX = min(0f, viewportWidthPx - contentWidthPx)
 
-        Box(
+        LaunchedEffect(chartData.title, weekCount) {
+            scale = 1f
+            offsetX = minOffsetX
+        }
+
+        Canvas(
             modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight()
-                .horizontalScroll(scrollState)
-                .pointerInput(chartData.title, weekCount) {
-                    detectTransformGestures { _, _, zoom, _ ->
+                .fillMaxSize()
+                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .pointerInput(chartData.title, weekCount, minOffsetX) {
+                    detectTransformGestures { _, pan, zoom, _ ->
                         scale = (scale * zoom).coerceIn(0.6f, 4f)
+                        val updatedWeekWidth = minWeekWidthPx * scale * 0.9f
+                        val updatedContentWidth =
+                            leftPaddingPx + weekCount * updatedWeekWidth + rightPaddingPx
+                        val updatedMinOffset = min(0f, viewportWidthPx - updatedContentWidth)
+                        offsetX = (offsetX + pan.x).coerceIn(updatedMinOffset, 0f)
                     }
                 },
         ) {
-            Canvas(
-                modifier = Modifier
-                    .width(contentWidth)
-                    .fillMaxHeight()
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-            ) {
-                val left = leftPaddingPx
-                val top = 24f
-                val bottom = size.height - 40f
-                val height = bottom - top
-                val weekWidth = (size.width - left - rightPaddingPx) / max(weekCount, 1) * 0.9f
-                val startX = left
+            val left = leftPaddingPx
+            val top = 24f
+            val bottom = size.height - 40f
+            val height = bottom - top
+            val weekWidth = weekWidthPx
+            val startX = left + offsetX.coerceIn(minOffsetX, 0f)
 
-                fun paceY(pace: Double): Float {
-                    val ratio = ((pace - minPace) / (maxPace - minPace)).toFloat()
-                    return top + ratio * height
-                }
+            fun paceY(pace: Double): Float {
+                val ratio = ((pace - minPace) / (maxPace - minPace)).toFloat()
+                return top + ratio * height
+            }
 
-                chartData.weeks.forEachIndexed { index, week ->
-                    val xCenter = startX + index * weekWidth + weekWidth / 2f
-                    val color = Color(ChartDataBuilder.MONTH_COLORS[week.month] ?: 0xFF888888)
-                    val avgY = paceY(week.averagePace)
+            chartData.weeks.forEachIndexed { index, week ->
+                val xCenter = startX + index * weekWidth + weekWidth / 2f
+                val color = Color(ChartDataBuilder.MONTH_COLORS[week.month] ?: 0xFF888888)
+                val avgY = paceY(week.averagePace)
 
-                    drawRect(
-                        color = color.copy(alpha = 0.3f),
-                        topLeft = Offset(xCenter - weekWidth * 0.28f, avgY),
-                        size = Size(weekWidth * 0.56f, bottom - avgY),
-                    )
+                drawRect(
+                    color = color.copy(alpha = 0.3f),
+                    topLeft = Offset(xCenter - weekWidth * 0.28f, avgY),
+                    size = Size(weekWidth * 0.56f, bottom - avgY),
+                )
 
-                    val offsets = ChartDataBuilder.calculateOffsets(week.workouts.size)
-                    week.workouts.forEachIndexed { pointIndex, workout ->
-                        val x = xCenter + offsets[pointIndex] * weekWidth
-                        val y = paceY(workout.paceMinPerKm)
-                        drawCircle(color = color, radius = 6f, center = Offset(x, y))
-                        drawCircle(color = Color.White, radius = 4f, center = Offset(x, y))
+                val offsets = ChartDataBuilder.calculateOffsets(week.workouts.size)
+                week.workouts.forEachIndexed { pointIndex, workout ->
+                    val x = xCenter + offsets[pointIndex] * weekWidth
+                    val y = paceY(workout.paceMinPerKm)
+                    drawCircle(color = color, radius = 6f, center = Offset(x, y))
+                    drawCircle(color = Color.White, radius = 4f, center = Offset(x, y))
 
-                        if (chartData.showPointLabels) {
-                            drawContext.canvas.nativeCanvas.apply {
-                                drawText(
-                                    PaceFormatter.toDisplay(workout.paceMinPerKm),
-                                    x,
-                                    y - 10f,
-                                    android.graphics.Paint().apply {
-                                        textSize = 24f
-                                        this.color = android.graphics.Color.DKGRAY
-                                        textAlign = android.graphics.Paint.Align.CENTER
-                                    },
-                                )
-                            }
+                    if (chartData.showPointLabels) {
+                        drawContext.canvas.nativeCanvas.apply {
+                            drawText(
+                                PaceFormatter.toDisplay(workout.paceMinPerKm),
+                                x,
+                                y - 10f,
+                                android.graphics.Paint().apply {
+                                    textSize = 24f
+                                    this.color = android.graphics.Color.DKGRAY
+                                    textAlign = android.graphics.Paint.Align.CENTER
+                                },
+                            )
                         }
                     }
+                }
 
-                    drawContext.canvas.nativeCanvas.apply {
-                        drawText(
-                            PaceFormatter.toDisplay(week.averagePace),
-                            xCenter,
-                            avgY + 28f,
-                            android.graphics.Paint().apply {
-                                textSize = 26f
-                                this.color = android.graphics.Color.BLACK
-                                textAlign = android.graphics.Paint.Align.CENTER
-                                isFakeBoldText = true
-                            },
-                        )
-                        drawText(
-                            week.label,
-                            xCenter,
-                            size.height - 8f,
-                            android.graphics.Paint().apply {
-                                textSize = 22f
-                                this.color = android.graphics.Color.DKGRAY
-                                textAlign = android.graphics.Paint.Align.CENTER
-                            },
-                        )
-                    }
+                drawContext.canvas.nativeCanvas.apply {
+                    drawText(
+                        PaceFormatter.toDisplay(week.averagePace),
+                        xCenter,
+                        avgY + 28f,
+                        android.graphics.Paint().apply {
+                            textSize = 26f
+                            this.color = android.graphics.Color.BLACK
+                            textAlign = android.graphics.Paint.Align.CENTER
+                            isFakeBoldText = true
+                        },
+                    )
+                    drawText(
+                        week.label,
+                        xCenter,
+                        size.height - 8f,
+                        android.graphics.Paint().apply {
+                            textSize = 22f
+                            this.color = android.graphics.Color.DKGRAY
+                            textAlign = android.graphics.Paint.Align.CENTER
+                        },
+                    )
                 }
             }
         }

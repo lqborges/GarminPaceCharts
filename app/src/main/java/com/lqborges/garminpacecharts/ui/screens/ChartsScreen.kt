@@ -1,6 +1,7 @@
 package com.lqborges.garminpacecharts.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -61,7 +62,10 @@ fun ChartsScreen(
         item {
             if (chartData != null) {
                 Text(chartData.title, style = MaterialTheme.typography.titleMedium)
-                PaceChart(chartData = chartData, onWorkoutSelected = onWorkoutSelected)
+                // Fixed-height chart outside vertical scroll measurement so pan/zoom gestures work.
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    PaceChart(chartData = chartData, onWorkoutSelected = onWorkoutSelected)
+                }
             } else {
                 Text("Import workouts to view charts.")
             }
