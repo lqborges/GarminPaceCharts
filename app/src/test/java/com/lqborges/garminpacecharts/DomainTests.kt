@@ -172,6 +172,37 @@ class ChartDataBuilderTest {
     }
 
     @Test
+    fun build_lastFourWeeks_includesJulyWorkout() {
+        val workouts = listOf(
+            workout("2026-06-29T07:30:00", 7.9),
+            workout("2026-07-05T07:23:05", 7.88),
+        )
+        val chart = ChartDataBuilder.build(
+            workouts,
+            com.lqborges.garminpacecharts.ChartRange.LAST_4_WEEKS,
+            now = LocalDateTime.parse("2026-07-07T22:00:00"),
+        )
+        assertEquals(1, chart.weeks.size)
+        assertEquals("Jul 27", chart.weeks.single().label)
+        assertEquals(2, chart.weeks.single().workouts.size)
+        assertEquals(7, chart.weeks.single().month)
+    }
+
+    @Test
+    fun build_weekLabelUsesLatestWorkoutMonth() {
+        val workouts = listOf(
+            workout("2026-06-29T07:30:00", 7.9),
+            workout("2026-07-05T07:23:05", 7.88),
+        )
+        val chart = ChartDataBuilder.build(
+            workouts,
+            com.lqborges.garminpacecharts.ChartRange.ALL_TIME,
+            now = LocalDateTime.parse("2026-07-07T22:00:00"),
+        )
+        assertEquals("Jul 27", chart.weeks.single().label)
+    }
+
+    @Test
     fun fourWeekTrend_detectsImprovement() {
         val trend = HealthAssessmentEngine.computeTrend(
             latestWindow = listOf(5.8, 5.9),

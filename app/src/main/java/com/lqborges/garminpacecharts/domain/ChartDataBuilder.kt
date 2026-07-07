@@ -20,9 +20,14 @@ object ChartDataBuilder {
     )
 
     fun build(workouts: List<Workout>, range: ChartRange, now: LocalDateTime = LocalDateTime.now()): ChartData {
+        val today = now.toLocalDate()
         val filtered = when (range) {
-            ChartRange.LAST_4_WEEKS -> workouts.filter { it.startTimeLocal >= now.minusWeeks(4) }
-            ChartRange.LAST_YEAR -> workouts.filter { it.startTimeLocal >= now.minusWeeks(52) }
+            ChartRange.LAST_4_WEEKS -> workouts.filter {
+                it.startTimeLocal.toLocalDate() >= today.minusWeeks(4)
+            }
+            ChartRange.LAST_YEAR -> workouts.filter {
+                it.startTimeLocal.toLocalDate() >= today.minusWeeks(52)
+            }
             ChartRange.ALL_TIME -> workouts
         }
 
@@ -32,13 +37,13 @@ object ChartDataBuilder {
 
         val weeks = grouped.map { (key, weekWorkouts) ->
             val sorted = weekWorkouts.sortedBy { it.startTimeLocal }
-            val first = sorted.first().startTimeLocal
+            val latest = sorted.last().startTimeLocal
             val avg = sorted.map { it.paceMinPerKm }.average()
             WeekBucket(
                 year = key.first,
                 week = key.second,
-                label = "${first.month.getDisplayName(TextStyle.SHORT, Locale.getDefault())} ${key.second}",
-                month = first.monthValue,
+                label = "${latest.month.getDisplayName(TextStyle.SHORT, Locale.getDefault())} ${key.second}",
+                month = latest.monthValue,
                 averagePace = avg,
                 workouts = sorted,
             )
@@ -73,15 +78,20 @@ object ChartDataBuilder {
     }
 
     fun fourWeekAveragePace(workouts: List<Workout>, now: LocalDateTime = LocalDateTime.now()): Double? {
-        val recent = workouts.filter { it.startTimeLocal >= now.minusWeeks(4) }
+        val cutoff = now.toLocalDate().minusWeeks(4)
+        val recent = workouts.filter { it.startTimeLocal.toLocalDate() >= cutoff }
         if (recent.isEmpty()) return null
         return recent.map { it.paceMinPerKm }.average()
     }
 
     fun previousFourWeekAveragePace(workouts: List<Workout>, now: LocalDateTime = LocalDateTime.now()): Double? {
-        val start = now.minusWeeks(8)
-        val end = now.minusWeeks(4)
-        val previous = workouts.filter { it.startTimeLocal >= start && it.startTimeLocal < end }
+        val today = now.toLocalDate()
+        val start = today.minusWeeks(8)
+        val end = today.minusWeeks(4)
+        val previous = workouts.filter {
+            val day = it.startTimeLocal.toLocalDate()
+            !day.isBefore(start) && day.isBefore(end)
+        }
         if (previous.isEmpty()) return null
         return previous.map { it.paceMinPerKm }.average()
     }
