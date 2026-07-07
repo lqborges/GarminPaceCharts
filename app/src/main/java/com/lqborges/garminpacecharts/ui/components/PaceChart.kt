@@ -2,6 +2,7 @@ package com.lqborges.garminpacecharts.ui.components
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -16,6 +17,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -24,6 +26,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -47,6 +50,7 @@ fun PaceChart(
     }
 
     var selectedWorkout by remember { mutableStateOf<Workout?>(null) }
+    var scale by remember(chartData.title) { mutableFloatStateOf(1f) }
     val scrollState = rememberScrollState()
     val density = LocalDensity.current
     val weekCount = chartData.weeks.size
@@ -56,6 +60,10 @@ fun PaceChart(
     }
     val minPace = allPaces.min() - 0.2
     val maxPace = allPaces.max() + 0.2
+
+    LaunchedEffect(chartData.title, weekCount) {
+        scale = 1f
+    }
 
     LaunchedEffect(chartData.title, weekCount, scrollState.maxValue) {
         if (scrollState.maxValue > 0) {
@@ -73,9 +81,10 @@ fun PaceChart(
         val minWeekWidthPx = with(density) { 56.dp.toPx() }
         val leftPaddingPx = with(density) { 48.dp.toPx() }
         val rightPaddingPx = with(density) { 24.dp.toPx() }
+        val scaledMinWeekWidthPx = minWeekWidthPx * scale
         val contentWidthPx = max(
             viewportWidthPx,
-            leftPaddingPx + weekCount * minWeekWidthPx + rightPaddingPx,
+            leftPaddingPx + weekCount * scaledMinWeekWidthPx + rightPaddingPx,
         )
         val contentWidth = with(density) { contentWidthPx.toDp() }
 
@@ -83,7 +92,12 @@ fun PaceChart(
             modifier = Modifier
                 .fillMaxWidth()
                 .fillMaxHeight()
-                .horizontalScroll(scrollState),
+                .horizontalScroll(scrollState)
+                .pointerInput(chartData.title, weekCount) {
+                    detectTransformGestures { _, _, zoom, _ ->
+                        scale = (scale * zoom).coerceIn(0.6f, 4f)
+                    }
+                },
         ) {
             Canvas(
                 modifier = Modifier
