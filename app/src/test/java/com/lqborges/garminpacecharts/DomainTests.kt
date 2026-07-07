@@ -235,6 +235,76 @@ class ChartDataBuilderTest {
         assertEquals(TrendDirection.IMPROVING, trend)
     }
 
+    @Test
+    fun weekLabelStride_increasesWhenZoomedOut() {
+        assertEquals(1, ChartDataBuilder.weekLabelStride(weekWidthPx = 80f, minLabelSpacingPx = 52f))
+        assertEquals(2, ChartDataBuilder.weekLabelStride(weekWidthPx = 40f, minLabelSpacingPx = 52f))
+        assertEquals(4, ChartDataBuilder.weekLabelStride(weekWidthPx = 14f, minLabelSpacingPx = 52f))
+    }
+
+    @Test
+    fun buildAxisMarkers_emitsMonthAndYearBoundaries() {
+        val weeks = listOf(
+            weekBucket(2024, 1, 1, "Jan 1"),
+            weekBucket(2024, 1, 2, "Jan 8"),
+            weekBucket(2024, 2, 5, "Feb 5"),
+            weekBucket(2025, 1, 1, "Jan 1"),
+        )
+        val markers = ChartDataBuilder.buildAxisMarkers(weeks)
+        assertTrue(markers.any { it.type == com.lqborges.garminpacecharts.domain.model.AxisMarkerType.YEAR && it.label == "2024" })
+        assertTrue(markers.any { it.type == com.lqborges.garminpacecharts.domain.model.AxisMarkerType.YEAR && it.label == "2025" })
+        assertTrue(markers.count { it.type == com.lqborges.garminpacecharts.domain.model.AxisMarkerType.MONTH } >= 3)
+    }
+
+    @Test
+    fun healthAssessment_showsLastNightAndSevenDayAverage() {
+        val now = LocalDateTime.parse("2026-07-07T08:00:00")
+        val metrics = listOf(
+            metric("SLEEP_SCORE", "2026-07-07T00:00:00", 82.0),
+            metric("SLEEP_DURATION", "2026-07-07T00:00:00", 7.4),
+            metric("SLEEP_SCORE", "2026-07-06T00:00:00", 70.0),
+            metric("SLEEP_DURATION", "2026-07-06T00:00:00", 6.8),
+            metric("SLEEP_SCORE", "2026-07-05T00:00:00", 74.0),
+            metric("STEPS", "2026-07-06T00:00:00", 9100.0),
+            metric("STEPS", "2026-07-05T00:00:00", 8400.0),
+            metric("STRESS", "2026-07-06T00:00:00", 28.0),
+            metric("STRESS", "2026-07-05T00:00:00", 31.0),
+            metric("TRAINING_READINESS", "2026-07-07T00:00:00", 68.0),
+            metric("TRAINING_READINESS", "2026-07-06T00:00:00", 55.0),
+        )
+        val assessment = HealthAssessmentEngine.generate(emptyList(), metrics, now)
+        val sleep = assessment.sections.first { it.title == "Sleep" }
+        assertTrue(sleep.lines.any { it == "Sleep score (last night): 82" })
+        assertTrue(sleep.lines.any { it.startsWith("Sleep score (7d avg):") })
+        assertTrue(sleep.lines.any { it == "Sleep duration (last night): 7.4 h" })
+        val activity = assessment.sections.first { it.title == "Activity" }
+        assertTrue(activity.lines.any { it == "Steps (last day): 9100" })
+        assertTrue(activity.lines.any { it.startsWith("Steps (7d avg):") })
+        val stress = assessment.sections.first { it.title == "Stress / Recovery" }
+        assertTrue(stress.lines.any { it == "Stress (last day): 28" })
+        val readiness = assessment.sections.first { it.title == "Training Readiness" }
+        assertTrue(readiness.lines.any { it == "Readiness (latest): 68" })
+        assertTrue(readiness.lines.any { it == "Readiness (prior day): 55" })
+    }
+
+    private fun weekBucket(year: Int, month: Int, week: Int, label: String) =
+        com.lqborges.garminpacecharts.domain.model.WeekBucket(
+            year = year,
+            week = week,
+            label = label,
+            month = month,
+            averagePace = 6.0,
+            workouts = emptyList(),
+        )
+
+    private fun metric(type: String, date: String, value: Double) =
+        com.lqborges.garminpacecharts.domain.model.HealthMetricPoint(
+            metricType = type,
+            date = LocalDateTime.parse(date),
+            value = value,
+            unit = "",
+        )
+
     private fun workout(date: String, pace: Double) =
         com.lqborges.garminpacecharts.domain.model.Workout(
             activityId = pace.toLong(),

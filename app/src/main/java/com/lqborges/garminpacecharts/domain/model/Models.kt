@@ -69,6 +69,25 @@ data class WeekBucket(
     val workouts: List<Workout>,
 )
 
+enum class AxisMarkerType {
+    MONTH,
+    YEAR,
+}
+
+data class ChartAxisMarker(
+    val type: AxisMarkerType,
+    val weekIndex: Int,
+    val label: String,
+)
+
+data class ChartMonthSpan(
+    val startWeekIndex: Int,
+    val endWeekIndex: Int,
+    val month: Int,
+    val year: Int,
+    val label: String,
+)
+
 data class ChartData(
     val title: String,
     val weeks: List<WeekBucket>,

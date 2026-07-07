@@ -1,12 +1,19 @@
 package com.lqborges.garminpacecharts.domain
 
 import com.lqborges.garminpacecharts.ChartRange
+import com.lqborges.garminpacecharts.domain.model.AxisMarkerType
+import com.lqborges.garminpacecharts.domain.model.ChartAxisMarker
 import com.lqborges.garminpacecharts.domain.model.ChartData
+import com.lqborges.garminpacecharts.domain.model.ChartMonthSpan
 import com.lqborges.garminpacecharts.domain.model.WeekBucket
 import com.lqborges.garminpacecharts.domain.model.Workout
 import java.time.LocalDateTime
+import java.time.Month
 import java.time.format.DateTimeFormatter
+import java.time.format.TextStyle
 import java.util.Locale
+import kotlin.math.ceil
+import kotlin.math.max
 
 object ChartDataBuilder {
     val MONTH_COLORS = mapOf(
@@ -107,5 +114,68 @@ object ChartDataBuilder {
         }
         if (previous.isEmpty()) return null
         return previous.map { it.paceMinPerKm }.average()
+    }
+
+    /** Minimum week columns between x-axis date labels; grows as the chart is zoomed out. */
+    fun weekLabelStride(weekWidthPx: Float, minLabelSpacingPx: Float): Int =
+        max(1, ceil(minLabelSpacingPx / weekWidthPx.coerceAtLeast(1f)).toInt())
+
+    fun shouldShowWeekLabel(weekIndex: Int, weekCount: Int, stride: Int): Boolean =
+        weekIndex % stride == 0 || weekIndex == weekCount - 1
+
+    fun buildAxisMarkers(weeks: List<WeekBucket>): List<ChartAxisMarker> {
+        if (weeks.isEmpty()) return emptyList()
+        val markers = mutableListOf<ChartAxisMarker>()
+        weeks.forEachIndexed { index, week ->
+            val previous = weeks.getOrNull(index - 1)
+            if (previous == null || previous.year != week.year) {
+                markers.add(
+                    ChartAxisMarker(
+                        type = AxisMarkerType.YEAR,
+                        weekIndex = index,
+                        label = week.year.toString(),
+                    ),
+                )
+            }
+            if (previous == null || previous.month != week.month || previous.year != week.year) {
+                markers.add(
+                    ChartAxisMarker(
+                        type = AxisMarkerType.MONTH,
+                        weekIndex = index,
+                        label = Month.of(week.month).getDisplayName(TextStyle.SHORT, Locale.getDefault()),
+                    ),
+                )
+            }
+        }
+        return markers
+    }
+
+    fun buildMonthSpans(weeks: List<WeekBucket>): List<ChartMonthSpan> {
+        if (weeks.isEmpty()) return emptyList()
+        val spans = mutableListOf<ChartMonthSpan>()
+        var spanStart = 0
+        weeks.forEachIndexed { index, week ->
+            val previous = weeks.getOrNull(index - 1)
+            val monthChanged = previous != null &&
+                (previous.month != week.month || previous.year != week.year)
+            if (monthChanged) {
+                spans += monthSpan(weeks, spanStart, index - 1)
+                spanStart = index
+            }
+        }
+        spans += monthSpan(weeks, spanStart, weeks.lastIndex)
+        return spans
+    }
+
+    private fun monthSpan(weeks: List<WeekBucket>, start: Int, end: Int): ChartMonthSpan {
+        val anchor = weeks[start]
+        val monthLabel = Month.of(anchor.month).getDisplayName(TextStyle.SHORT, Locale.getDefault())
+        return ChartMonthSpan(
+            startWeekIndex = start,
+            endWeekIndex = end,
+            month = anchor.month,
+            year = anchor.year,
+            label = monthLabel,
+        )
     }
 }

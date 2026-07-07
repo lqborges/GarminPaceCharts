@@ -35,6 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.lqborges.garminpacecharts.domain.ChartDataBuilder
 import com.lqborges.garminpacecharts.domain.PaceFormatter
+import com.lqborges.garminpacecharts.domain.model.AxisMarkerType
 import com.lqborges.garminpacecharts.domain.model.ChartData
 import com.lqborges.garminpacecharts.domain.model.Workout
 import kotlinx.coroutines.coroutineScope
@@ -59,6 +60,17 @@ private class ChartTextPaints {
         textSize = 22f
         color = android.graphics.Color.DKGRAY
         textAlign = Paint.Align.CENTER
+    }
+    val monthLabel = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textSize = 20f
+        color = android.graphics.Color.GRAY
+        textAlign = Paint.Align.CENTER
+    }
+    val yearLabel = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textSize = 24f
+        color = android.graphics.Color.BLACK
+        textAlign = Paint.Align.CENTER
+        isFakeBoldText = true
     }
 }
 
@@ -119,6 +131,10 @@ fun PaceChart(
             min(0f, viewportWidthPx - contentWidthPx(scaleValue))
 
         val weekWidthPx = minWeekWidthPx * scale * 0.9f
+        val minLabelSpacingPx = with(density) { 52.dp.toPx() }
+        val labelStride = ChartDataBuilder.weekLabelStride(weekWidthPx, minLabelSpacingPx)
+        val axisMarkers = remember(chartData) { ChartDataBuilder.buildAxisMarkers(chartData.weeks) }
+        val monthSpans = remember(chartData) { ChartDataBuilder.buildMonthSpans(chartData.weeks) }
         val canvasWidthPx = contentWidthPx(scale)
         val canvasWidthDp = with(density) { canvasWidthPx.toDp() }
         val clampedOffsetX = offsetX.coerceIn(minOffsetPx(scale), 0f)
@@ -166,15 +182,55 @@ fun PaceChart(
                     .fillMaxHeight()
                     .graphicsLayer { translationX = clampedOffsetX },
             ) {
-                val top = 24f
-                val bottom = size.height - 40f
+                val top = 28f
+                val bottom = size.height - 52f
                 val height = bottom - top
                 val startX = leftPaddingPx
                 val drawTextLabels = !isTransforming
+                val showWeekLabels = labelStride <= 3
+                val showAveragePaceLabels = weekWidthPx >= minLabelSpacingPx * 0.75f
 
                 fun paceY(pace: Double): Float {
                     val ratio = ((pace - minPace) / (maxPace - minPace)).toFloat()
                     return top + ratio * height
+                }
+
+                fun weekStartX(index: Int): Float =
+                    startX + index * weekWidthPx
+
+                axisMarkers.forEach { marker ->
+                    val x = weekStartX(marker.weekIndex)
+                    val lineColor = when (marker.type) {
+                        AxisMarkerType.YEAR -> Color(0x66000000)
+                        AxisMarkerType.MONTH -> Color(0x33000000)
+                    }
+                    drawLine(
+                        color = lineColor,
+                        start = Offset(x, top),
+                        end = Offset(x, bottom),
+                        strokeWidth = if (marker.type == AxisMarkerType.YEAR) 2f else 1f,
+                    )
+                }
+
+                if (drawTextLabels) {
+                    axisMarkers.filter { it.type == AxisMarkerType.YEAR }.forEach { marker ->
+                        drawContext.canvas.nativeCanvas.drawText(
+                            marker.label,
+                            weekStartX(marker.weekIndex) + weekWidthPx / 2f,
+                            18f,
+                            textPaints.yearLabel,
+                        )
+                    }
+
+                    monthSpans.forEach { span ->
+                        val centerX = (weekStartX(span.startWeekIndex) + weekStartX(span.endWeekIndex) + weekWidthPx) / 2f
+                        drawContext.canvas.nativeCanvas.drawText(
+                            span.label,
+                            centerX,
+                            size.height - 28f,
+                            textPaints.monthLabel,
+                        )
+                    }
                 }
 
                 chartData.weeks.forEachIndexed { index, week ->
@@ -207,18 +263,24 @@ fun PaceChart(
 
                     if (drawTextLabels) {
                         drawContext.canvas.nativeCanvas.apply {
-                            drawText(
-                                PaceFormatter.toDisplay(week.averagePace),
-                                xCenter,
-                                avgY + 28f,
-                                textPaints.averagePace,
-                            )
-                            drawText(
-                                week.label,
-                                xCenter,
-                                size.height - 8f,
-                                textPaints.weekLabel,
-                            )
+                            if (showAveragePaceLabels) {
+                                drawText(
+                                    PaceFormatter.toDisplay(week.averagePace),
+                                    xCenter,
+                                    avgY + 28f,
+                                    textPaints.averagePace,
+                                )
+                            }
+                            if (showWeekLabels &&
+                                ChartDataBuilder.shouldShowWeekLabel(index, weekCount, labelStride)
+                            ) {
+                                drawText(
+                                    week.label,
+                                    xCenter,
+                                    size.height - 8f,
+                                    textPaints.weekLabel,
+                                )
+                            }
                         }
                     }
                 }
