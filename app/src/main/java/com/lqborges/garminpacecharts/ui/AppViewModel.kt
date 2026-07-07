@@ -19,8 +19,22 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.time.Instant
 
 class AppViewModel(private val container: AppContainer) : ViewModel() {
+    init {
+        viewModelScope.launch {
+            combine(
+                container.workoutRepository.observeWorkouts(),
+                container.preferencesManager.lastRefreshAt,
+            ) { workoutList, lastRefreshMs ->
+                workoutList to lastRefreshMs?.let { Instant.ofEpochMilli(it) }
+            }.collect { (workoutList, lastRefreshAt) ->
+                container.healthRepository.regenerateIfStale(workoutList, lastRefreshAt)
+            }
+        }
+    }
+
     val setupComplete = container.preferencesManager.setupComplete
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
@@ -58,8 +72,10 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             val result = container.workoutRepository.importJson(raw)
             _importResult.value = result
-            if (result.imported > 0) {
+            if (result.totalStored > 0) {
                 container.healthRepository.regenerateAssessment()
+            }
+            if (result.imported > 0 || result.totalStored > 0) {
                 container.preferencesManager.setSetupComplete(true)
             }
         }

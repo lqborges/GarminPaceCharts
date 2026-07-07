@@ -182,7 +182,10 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                         composable(Routes.HEALTH) {
-                            HealthScreen(assessment = healthAssessment)
+                            HealthScreen(
+                                assessment = healthAssessment,
+                                onRegenerate = { viewModel.regenerateHealthAssessment() },
+                            )
                         }
                         composable(Routes.REFRESH) {
                             RefreshScreen(

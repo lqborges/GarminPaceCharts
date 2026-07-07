@@ -209,6 +209,23 @@ class ChartDataBuilderTest {
     }
 
     @Test
+    fun healthAssessment_includesJulyWorkoutInFourWeekCount() {
+        val workouts = listOf(
+            workout("2026-07-05T07:23:05", 7.88),
+        )
+        val assessment = HealthAssessmentEngine.generate(
+            workouts,
+            metrics = emptyList(),
+            now = LocalDateTime.parse("2026-07-07T22:00:00"),
+        )
+        val activity = assessment.sections.first { it.title == "Activity" }
+        assertTrue(activity.lines.any { it.contains("Progression A (4w): 1") })
+        assertTrue(activity.lines.any { it.contains("Latest pace") })
+        val profile = assessment.sections.first { it.title == "Profile" }
+        assertTrue(profile.lines.any { it.contains("Data through: 2026-07-05") })
+    }
+
+    @Test
     fun fourWeekTrend_detectsImprovement() {
         val trend = HealthAssessmentEngine.computeTrend(
             latestWindow = listOf(5.8, 5.9),

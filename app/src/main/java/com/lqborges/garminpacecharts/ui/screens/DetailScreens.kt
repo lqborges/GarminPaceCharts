@@ -46,12 +46,18 @@ fun WorkoutDetailScreen(
 }
 
 @Composable
-fun HealthScreen(assessment: HealthAssessment?) {
+fun HealthScreen(
+    assessment: HealthAssessment?,
+    onRegenerate: () -> Unit = {},
+) {
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text("Health assessment", style = MaterialTheme.typography.headlineMedium)
+        Button(onClick = onRegenerate, modifier = Modifier.fillMaxWidth()) {
+            Text("Regenerate from latest data")
+        }
         if (assessment == null) {
             Text("No assessment yet. Import workouts or refresh Garmin data.")
             return
@@ -62,6 +68,13 @@ fun HealthScreen(assessment: HealthAssessment?) {
                 Text("Status: ${assessment.overallStatus}", style = MaterialTheme.typography.titleMedium)
                 Text(assessment.summary)
                 Text("Confidence: ${assessment.confidence}")
+                Text(
+                    "Generated: ${assessment.generatedAt}",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                assessment.dataEndDate?.let {
+                    Text("Data through: $it", style = MaterialTheme.typography.bodySmall)
+                }
             }
         }
 

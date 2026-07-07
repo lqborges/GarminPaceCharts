@@ -17,9 +17,13 @@ import com.lqborges.garminpacecharts.domain.model.toEpochMillis
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
@@ -117,8 +121,9 @@ class RefreshRepository(
                     workoutRepository.upsertWorkouts(newWorkouts)
                 }
 
-                val metrics = fetchWellnessMetrics(fetchStart, fetchEnd)
+                val metrics = fetchWellnessMetrics(fetchEnd)
                 if (metrics.isNotEmpty()) {
+                    database.healthMetricDao().deleteAll()
                     database.healthMetricDao().upsertAll(metrics)
                 }
                 healthRepository.regenerateAssessment()
@@ -165,14 +170,13 @@ class RefreshRepository(
             }
         }
 
-    private suspend fun fetchWellnessMetrics(start: LocalDate, end: LocalDate): List<HealthMetricSnapshotEntity> {
+    private suspend fun fetchWellnessMetrics(end: LocalDate): List<HealthMetricSnapshotEntity> {
         val metrics = mutableListOf<HealthMetricSnapshotEntity>()
+        val start = end.minusDays(WELLNESS_LOOKBACK_DAYS)
         var date = end
         while (!date.isBefore(start)) {
-            val summary = garminApiClient.fetchDailySummary(date)
-            if (summary != null) {
-                val millis = date.atStartOfDay().toEpochMillis()
-
+            val millis = date.atStartOfDay().toEpochMillis()
+            garminApiClient.fetchDailySummary(date)?.let { summary ->
                 summary["restingHeartRate"]?.jsonPrimitive?.intOrNull?.toDouble()?.let {
                     metrics.add(metric("RESTING_HR", millis, it, "bpm"))
                 }
@@ -185,10 +189,55 @@ class RefreshRepository(
                 summary["vo2Max"]?.jsonPrimitive?.doubleOrNull?.let {
                     metrics.add(metric("VO2_MAX", millis, it, "ml/kg/min"))
                 }
+                summary["vo2MaxPrecise"]?.jsonPrimitive?.doubleOrNull?.let {
+                    metrics.add(metric("VO2_MAX", millis, it, "ml/kg/min"))
+                }
+            }
+            garminApiClient.fetchSleepData(date)?.let { sleep ->
+                val daily = sleep["dailySleepDTO"]?.jsonObject
+                daily?.get("sleepScores")?.jsonObject?.get("overall")?.jsonObject
+                    ?.get("value")?.jsonPrimitive?.intOrNull?.toDouble()?.let {
+                        metrics.add(metric("SLEEP_SCORE", millis, it, "score"))
+                    }
+                daily?.get("sleepTimeSeconds")?.jsonPrimitive?.longOrNull?.let { secs ->
+                    metrics.add(metric("SLEEP_DURATION", millis, secs / 3600.0, "hours"))
+                }
+            }
+            parseReadinessScore(garminApiClient.fetchTrainingReadiness(date))?.let {
+                metrics.add(metric("TRAINING_READINESS", millis, it, "score"))
+            }
+            garminApiClient.fetchEnduranceScore(date)?.let { endurance ->
+                endurance["overallScore"]?.jsonPrimitive?.doubleOrNull?.let {
+                    metrics.add(metric("ENDURANCE_SCORE", millis, it, "score"))
+                }
             }
             date = date.minusDays(1)
         }
         return metrics
+    }
+
+    private fun parseReadinessScore(element: JsonElement?): Double? {
+        when (element) {
+            null -> return null
+            is JsonArray -> {
+                val morning = element.firstOrNull {
+                    (it as? JsonObject)?.get("inputContext")?.jsonPrimitive?.contentOrNull ==
+                        "AFTER_WAKEUP_RESET"
+                } as? JsonObject
+                val entry = morning ?: element.firstOrNull() as? JsonObject ?: return null
+                return entry["score"]?.jsonPrimitive?.doubleOrNull
+                    ?: entry["score"]?.jsonPrimitive?.intOrNull?.toDouble()
+            }
+            is JsonObject -> {
+                return element["score"]?.jsonPrimitive?.doubleOrNull
+                    ?: element["score"]?.jsonPrimitive?.intOrNull?.toDouble()
+            }
+            else -> return null
+        }
+    }
+
+    companion object {
+        private const val WELLNESS_LOOKBACK_DAYS = 14L
     }
 
     private fun metric(type: String, millis: Long, value: Double, unit: String) =

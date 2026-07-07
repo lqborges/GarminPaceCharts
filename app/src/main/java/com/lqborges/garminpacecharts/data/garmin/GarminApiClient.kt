@@ -4,10 +4,14 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 import java.time.LocalDate
 import java.util.concurrent.TimeUnit
 
@@ -21,8 +25,14 @@ class GarminApiClient(
 ) {
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
     private val baseUrl = "https://connectapi.garmin.com"
+    @Volatile
+    private var cachedDisplayName: String? = null
 
     fun isConfigured(): Boolean = tokenStore.hasTokens()
+
+    fun clearDisplayNameCache() {
+        cachedDisplayName = null
+    }
 
     suspend fun fetchActivitiesByDate(startDate: LocalDate, endDate: LocalDate): List<JsonObject> {
         if (!tokenStore.hasTokens()) {
@@ -56,10 +66,43 @@ class GarminApiClient(
         return connectApiRaw(path).jsonObject
     }
 
-    suspend fun fetchDailySummary(date: LocalDate): JsonObject? {
-        return runCatching {
-            connectApiRaw("/usersummary-service/usersummary/daily?calendarDate=$date").jsonObject
+    fun fetchDailySummary(date: LocalDate): JsonObject? =
+        runCatching {
+            connectApiRaw(
+                "/usersummary-service/usersummary/daily/${encodedDisplayName()}?calendarDate=$date",
+            ).jsonObject
         }.getOrNull()
+
+    fun fetchSleepData(date: LocalDate): JsonObject? =
+        runCatching {
+            connectApiRaw(
+                "/wellness-service/wellness/dailySleepData/${encodedDisplayName()}" +
+                    "?date=$date&nonSleepBufferMinutes=60",
+            ).jsonObject
+        }.getOrNull()
+
+    fun fetchTrainingReadiness(date: LocalDate): JsonElement? =
+        runCatching {
+            connectApiRaw("/metrics-service/metrics/trainingreadiness/$date")
+        }.getOrNull()
+
+    fun fetchEnduranceScore(date: LocalDate): JsonObject? =
+        runCatching {
+            connectApiRaw("/metrics-service/metrics/endurancescore?calendarDate=$date").jsonObject
+        }.getOrNull()
+
+    private fun encodedDisplayName(): String {
+        val name = requireDisplayName()
+        return URLEncoder.encode(name, StandardCharsets.UTF_8.toString())
+    }
+
+    private fun requireDisplayName(): String {
+        cachedDisplayName?.let { return it }
+        val profile = connectApiRaw("/userprofile-service/socialProfile").jsonObject
+        val name = profile["displayName"]?.jsonPrimitive?.contentOrNull
+            ?: throw GarminApiException("Garmin profile missing displayName", "PROFILE")
+        cachedDisplayName = name
+        return name
     }
 
     private fun connectApi(path: String): List<JsonObject> {

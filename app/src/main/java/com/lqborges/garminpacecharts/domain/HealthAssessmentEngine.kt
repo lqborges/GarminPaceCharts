@@ -29,9 +29,13 @@ object HealthAssessmentEngine {
     }
 
     fun computeRunningTrend(workouts: List<Workout>, now: LocalDateTime = LocalDateTime.now()): TrendDirection {
-        val recent = workouts.filter { it.startTimeLocal >= now.minusDays(7) }.map { it.paceMinPerKm }
+        val today = now.toLocalDate()
+        val recent = workouts.filter {
+            !it.startTimeLocal.toLocalDate().isBefore(today.minusDays(7))
+        }.map { it.paceMinPerKm }
         val previous = workouts.filter {
-            it.startTimeLocal >= now.minusDays(14) && it.startTimeLocal < now.minusDays(7)
+            val day = it.startTimeLocal.toLocalDate()
+            !day.isBefore(today.minusDays(14)) && day.isBefore(today.minusDays(7))
         }.map { it.paceMinPerKm }
         return computeTrend(recent, previous, lowerIsBetter = true)
     }
@@ -47,7 +51,8 @@ object HealthAssessmentEngine {
             ?: metrics.maxOfOrNull { it.date }
 
         val runningTrend = computeRunningTrend(workouts, now)
-        val fourWeekCount = workouts.count { it.startTimeLocal >= now.minusWeeks(4) }
+        val fourWeekCutoff = now.toLocalDate().minusWeeks(4)
+        val fourWeekCount = workouts.count { it.startTimeLocal.toLocalDate() >= fourWeekCutoff }
         val latestPace = workouts.maxByOrNull { it.startTimeLocal }?.paceMinPerKm
 
         val vo2 = latestMetric(metrics, "VO2_MAX")
@@ -99,6 +104,7 @@ object HealthAssessmentEngine {
                 lines = buildList {
                     add("Workouts tracked: ${workouts.size}")
                     dataStart?.let { add("Data from: $it") }
+                    dataEnd?.let { add("Data through: $it") }
                 },
             ),
             HealthSection(
@@ -201,8 +207,10 @@ object HealthAssessmentEngine {
         days: Long,
         now: LocalDateTime,
     ): Double? {
-        val cutoff = now.minusDays(days)
-        val values = metrics.filter { it.metricType == type && it.date >= cutoff }.map { it.value }
+        val cutoff = now.toLocalDate().minusDays(days)
+        val values = metrics.filter {
+            it.metricType == type && !it.date.toLocalDate().isBefore(cutoff)
+        }.map { it.value }
         if (values.isEmpty()) return null
         return values.average()
     }
