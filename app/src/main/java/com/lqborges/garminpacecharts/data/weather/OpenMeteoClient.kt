@@ -20,9 +20,10 @@ class OpenMeteoClient(
             append("https://api.open-meteo.com/v1/forecast")
             append("?latitude=$latitude")
             append("&longitude=$longitude")
-            append("&current=temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,weather_code,wind_speed_10m")
+            append("&current=temperature_2m")
+            append("&hourly=precipitation_probability")
+            append("&forecast_hours=6")
             append("&timezone=Europe%2FLondon")
-            append("&forecast_days=1")
         }
         val request = Request.Builder().url(url).get().build()
         httpClient.newCall(request).execute().use { response ->

@@ -48,7 +48,7 @@ fun WeatherSnapshotCard(
 private fun WeatherSnapshotBody(snapshot: WeatherSnapshot) {
     Column(
         modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -67,19 +67,8 @@ private fun WeatherSnapshotBody(snapshot: WeatherSnapshot) {
             )
         }
         Text(
-            WeatherFormatter.describeWeather(snapshot.weatherCode),
+            WeatherFormatter.formatRainChanceNextHour(snapshot.rainChanceNextHourPercent),
             style = MaterialTheme.typography.bodyMedium,
-        )
-        Text(
-            buildString {
-                append("Feels ${WeatherFormatter.formatTemperature(snapshot.apparentTemperatureC)}")
-                append(" · Wind ${WeatherFormatter.formatWind(snapshot.windSpeedKmh)}")
-                append(" · Humidity ${snapshot.humidityPercent}%")
-                if (snapshot.precipitationMm > 0.0) {
-                    append(" · Rain ${"%.1f".format(snapshot.precipitationMm)} mm")
-                }
-            },
-            style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }

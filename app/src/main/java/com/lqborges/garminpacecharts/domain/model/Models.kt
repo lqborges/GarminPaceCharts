@@ -98,11 +98,7 @@ data class ChartData(
 data class WeatherSnapshot(
     val locationName: String,
     val temperatureC: Double,
-    val apparentTemperatureC: Double,
-    val humidityPercent: Int,
-    val windSpeedKmh: Double,
-    val precipitationMm: Double,
-    val weatherCode: Int,
+    val rainChanceNextHourPercent: Int,
     val observedAt: String,
     val fetchedAtEpochMillis: Long = System.currentTimeMillis(),
 )

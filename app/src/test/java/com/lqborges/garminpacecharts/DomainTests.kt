@@ -160,17 +160,16 @@ class DateParserTest {
 
 class WeatherParserTest {
     @Test
-    fun fromOpenMeteo_parsesCurrentConditions() {
+    fun fromOpenMeteo_parsesTemperatureAndNextHourRainChance() {
         val json = """
             {
               "current": {
-                "time": "2026-07-08T07:00",
-                "temperature_2m": 14.2,
-                "apparent_temperature": 13.1,
-                "relative_humidity_2m": 72,
-                "precipitation": 0.0,
-                "weather_code": 2,
-                "wind_speed_10m": 11.5
+                "time": "2026-07-08T07:30",
+                "temperature_2m": 14.2
+              },
+              "hourly": {
+                "time": ["2026-07-08T07:00", "2026-07-08T08:00", "2026-07-08T09:00"],
+                "precipitation_probability": [10, 35, 60]
               }
             }
         """.trimIndent()
@@ -179,8 +178,21 @@ class WeatherParserTest {
         assertNotNull(snapshot)
         assertEquals("Sheffield", snapshot!!.locationName)
         assertEquals(14.2, snapshot.temperatureC, 0.01)
-        assertEquals(2, snapshot.weatherCode)
-        assertEquals("Partly cloudy", WeatherFormatter.describeWeather(snapshot.weatherCode))
+        assertEquals(35, snapshot.rainChanceNextHourPercent)
+        assertEquals("Rain next hour: 35%", WeatherFormatter.formatRainChanceNextHour(snapshot.rainChanceNextHourPercent))
+    }
+
+    @Test
+    fun nextHourRainChance_usesUpcomingHourSlot() {
+        val hourly = kotlinx.serialization.json.Json.parseToJsonElement(
+            """
+            {
+              "time": ["2026-07-08T07:00", "2026-07-08T08:00"],
+              "precipitation_probability": [5, 42]
+            }
+            """.trimIndent(),
+        ).jsonObject
+        assertEquals(42, WeatherParser.nextHourRainChance("2026-07-08T07:45", hourly))
     }
 }
 
