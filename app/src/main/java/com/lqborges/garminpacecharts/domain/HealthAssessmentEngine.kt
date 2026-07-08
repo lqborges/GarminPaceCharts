@@ -2,6 +2,7 @@ package com.lqborges.garminpacecharts.domain
 
 import com.lqborges.garminpacecharts.TrendDirection
 import com.lqborges.garminpacecharts.domain.model.HealthAssessment
+import com.lqborges.garminpacecharts.domain.model.HealthMetricDisplay
 import com.lqborges.garminpacecharts.domain.model.HealthMetricPoint
 import com.lqborges.garminpacecharts.domain.model.HealthSection
 import com.lqborges.garminpacecharts.domain.model.Workout
@@ -58,25 +59,38 @@ object HealthAssessmentEngine {
 
         val lastNight = now.toLocalDate()
         val lastCompleteDay = now.toLocalDate().minusDays(1)
+        val priorDay = now.toLocalDate().minusDays(2)
 
         val vo2 = latestMetric(metrics, "VO2_MAX")
+        val vo2Prior = metricOnDate(metrics, "VO2_MAX", lastCompleteDay)
+            ?: metricOnDate(metrics, "VO2_MAX", priorDay)
         val restingHr = latestMetric(metrics, "RESTING_HR")
+        val restingHrPrior = metricOnDate(metrics, "RESTING_HR", lastCompleteDay)
+        val weeklyRhrRank = WellnessStatsBuilder.weeklyValueRank(metrics, "RESTING_HR", now, lowerIsBetter = true)
+
         val sleepScoreLastNight = metricOnDate(metrics, "SLEEP_SCORE", lastNight)
             ?: metricOnDate(metrics, "SLEEP_SCORE", lastCompleteDay)
+        val sleepScorePriorNight = metricOnDate(metrics, "SLEEP_SCORE", lastCompleteDay)
+            .takeIf { sleepScoreLastNight != null }
         val sleepDurationLastNight = metricOnDate(metrics, "SLEEP_DURATION", lastNight)
             ?: metricOnDate(metrics, "SLEEP_DURATION", lastCompleteDay)
+        val sleepDurationPriorNight = metricOnDate(metrics, "SLEEP_DURATION", lastCompleteDay)
         val sleepScoreAvg = averageMetric(metrics, "SLEEP_SCORE", days = 7, now)
+        val sleepScoreAvgPrior = previousAverageMetric(metrics, "SLEEP_SCORE", days = 7, now)
         val sleepDurationAvg = averageMetric(metrics, "SLEEP_DURATION", days = 7, now)
-        val stepsLastDay = metricOnDate(metrics, "STEPS", lastCompleteDay)
-            ?: metricOnDate(metrics, "STEPS", lastNight)
-        val stepsAvg = averageMetric(metrics, "STEPS", days = 7, now)
+        val sleepDurationAvgPrior = previousAverageMetric(metrics, "SLEEP_DURATION", days = 7, now)
+
         val stressLastDay = metricOnDate(metrics, "STRESS", lastCompleteDay)
             ?: metricOnDate(metrics, "STRESS", lastNight)
+        val stressPriorDay = metricOnDate(metrics, "STRESS", priorDay)
         val stressAvg = averageMetric(metrics, "STRESS", days = 7, now)
+        val stressAvgPrior = previousAverageMetric(metrics, "STRESS", days = 7, now)
+
         val readiness = latestMetric(metrics, "TRAINING_READINESS")
             ?: metricOnDate(metrics, "TRAINING_READINESS", lastNight)
-        val readinessLastNight = metricOnDate(metrics, "TRAINING_READINESS", lastCompleteDay)
+        val readinessPrior = metricOnDate(metrics, "TRAINING_READINESS", lastCompleteDay)
         val endurance = latestMetric(metrics, "ENDURANCE_SCORE")
+        val endurancePrior = metricOnDate(metrics, "ENDURANCE_SCORE", lastCompleteDay)
 
         val strengths = mutableListOf<String>()
         val concerns = mutableListOf<String>()
@@ -87,14 +101,13 @@ object HealthAssessmentEngine {
         if (vo2 != null && vo2 >= 40) strengths.add("Strong VO2 max (${WellnessMetricParser.formatVo2(vo2)})")
         val sleepScoreForSignals = sleepScoreLastNight ?: sleepScoreAvg
         if (sleepScoreForSignals != null && sleepScoreForSignals >= 75) strengths.add("Good recent sleep scores")
+        weeklyRhrRank?.let { if (it.rank <= 3) strengths.add("Elite weekly resting HR") }
 
         if (fourWeekCount < 4) concerns.add("Low Progression A frequency")
         if (sleepScoreForSignals != null && sleepScoreForSignals < 65) concerns.add("Sleep consistency")
         if (readiness != null && readiness < 50) concerns.add("Low training readiness")
         val stressForSignals = stressLastDay ?: stressAvg
-        if (stressForSignals != null && stressForSignals > 35) {
-            concerns.add("Elevated stress")
-        }
+        if (stressForSignals != null && stressForSignals > 35) concerns.add("Elevated stress")
 
         recommendations += "Keep Progression A twice weekly."
         if (readiness != null && readiness < 50) {
@@ -106,10 +119,14 @@ object HealthAssessmentEngine {
         if (latestPace != null && runningTrend == TrendDirection.IMPROVING) {
             recommendations += "Maintain current progression; latest pace ${PaceFormatter.toDisplay(latestPace)} min/km."
         }
-        val stepsForSignals = stepsLastDay ?: stepsAvg
-        if (stepsForSignals != null && stepsForSignals < 7000) {
-            recommendations += "Increase daily steps toward 8,000+ on non-running days."
-        }
+
+        val sleepCoachComments = SleepCoach.comments(
+            sleepScoreLastNight = sleepScoreLastNight,
+            sleepDurationLastNight = sleepDurationLastNight,
+            sleepScoreAvg = sleepScoreAvg,
+            sleepDurationAvg = sleepDurationAvg,
+            sleepScorePriorNight = sleepScorePriorNight,
+        )
 
         val overallStatus = when {
             concerns.isEmpty() && strengths.isNotEmpty() -> "Good, improving"
@@ -128,56 +145,82 @@ object HealthAssessmentEngine {
             ),
             HealthSection(
                 title = "Cardio",
-                lines = buildList {
-                    vo2?.let { add("VO2 max: ${WellnessMetricParser.formatVo2(it)}") } ?: add("VO2 max: no data")
-                    restingHr?.let { add("Resting HR: ${it.toInt()} bpm") } ?: add("Resting HR: no data")
-                },
-            ),
-            HealthSection(
-                title = "Activity",
-                lines = buildList {
-                    add("Progression A (4w): $fourWeekCount sessions")
-                    latestPace?.let { add("Latest pace: ${PaceFormatter.toDisplay(it)} min/km") }
-                    stepsLastDay?.let { add("Steps (last day): ${it.toInt()}") }
-                    stepsAvg?.let { add("Steps (7d avg): ${it.toInt()}") }
-                    if (stepsLastDay == null && stepsAvg == null) add("Steps: no data")
-                },
-            ),
-            HealthSection(
-                title = "Sleep",
-                lines = buildList {
-                    sleepScoreLastNight?.let { add("Sleep score (last night): ${it.toInt()}") }
-                    sleepScoreAvg?.let { add("Sleep score (7d avg): ${it.toInt()}") }
-                    if (sleepScoreLastNight == null && sleepScoreAvg == null) add("Sleep score: no data")
-                    sleepDurationLastNight?.let { add("Sleep duration (last night): ${"%.1f".format(it)} h") }
-                    sleepDurationAvg?.let { add("Sleep duration (7d avg): ${"%.1f".format(it)} h") }
-                    if (sleepDurationLastNight == null && sleepDurationAvg == null) add("Sleep duration: no data")
-                },
-            ),
-            HealthSection(
-                title = "Stress / Recovery",
-                lines = buildList {
-                    stressLastDay?.let { add("Stress (last day): ${it.toInt()}") }
-                    stressAvg?.let { add("Stress (7d avg): ${it.toInt()}") }
-                    if (stressLastDay == null && stressAvg == null) add("Stress: no data")
-                },
-            ),
-            HealthSection(
-                title = "Training Readiness",
-                lines = buildList {
-                    when {
-                        readiness != null && readinessLastNight != null && readinessLastNight != readiness ->
-                            add("Readiness: ${readiness.toInt()} (prior day ${readinessLastNight.toInt()})")
-                        readiness != null -> add("Readiness: ${readiness.toInt()}")
-                        readinessLastNight != null -> add("Readiness: ${readinessLastNight.toInt()}")
-                        else -> add("Readiness: no data")
+                metrics = buildList {
+                    buildMetric("VO2 max", vo2, vo2Prior, { WellnessMetricParser.formatVo2(it) })?.let(::add)
+                    buildMetric("Resting HR", restingHr, restingHrPrior, { "${it.toInt()} bpm" }, lowerIsBetter = true)?.let(::add)
+                    weeklyRhrRank?.let { rank ->
+                        add(
+                            HealthMetricDisplay(
+                                label = "Resting HR (week avg)",
+                                value = WellnessStatsBuilder.formatWeeklyRhrRank(rank),
+                                progress = (1f - (rank.rank.toFloat() / rank.totalWeeks.coerceAtLeast(1))).coerceIn(0.1f, 1f),
+                                lowerIsBetter = true,
+                            ),
+                        )
+                    }
+                    if (isEmpty()) {
+                        add(HealthMetricDisplay(label = "Cardio", value = "no data"))
                     }
                 },
             ),
             HealthSection(
+                title = "Sleep",
+                metrics = buildList {
+                    buildMetric(
+                        "Sleep score (last night)",
+                        sleepScoreLastNight,
+                        sleepScorePriorNight,
+                        { it.toInt().toString() },
+                        progress = sleepScoreLastNight?.let { (it / 100.0).toFloat() },
+                    )?.let(::add)
+                    buildMetric(
+                        "Sleep score (7d avg)",
+                        sleepScoreAvg,
+                        sleepScoreAvgPrior,
+                        { it.toInt().toString() },
+                        progress = sleepScoreAvg?.let { (it / 100.0).toFloat() },
+                    )?.let(::add)
+                    buildMetric(
+                        "Sleep duration (last night)",
+                        sleepDurationLastNight,
+                        sleepDurationPriorNight,
+                        { "%.1f h".format(it) },
+                        lowerIsBetter = false,
+                    )?.let(::add)
+                    buildMetric(
+                        "Sleep duration (7d avg)",
+                        sleepDurationAvg,
+                        sleepDurationAvgPrior,
+                        { "%.1f h".format(it) },
+                    )?.let(::add)
+                    if (isEmpty()) {
+                        add(HealthMetricDisplay(label = "Sleep", value = "no data"))
+                    }
+                },
+                coachComments = sleepCoachComments,
+            ),
+            HealthSection(
+                title = "Stress / Recovery",
+                metrics = buildList {
+                    buildMetric("Stress (last day)", stressLastDay, stressPriorDay, { it.toInt().toString() }, lowerIsBetter = true)?.let(::add)
+                    buildMetric("Stress (7d avg)", stressAvg, stressAvgPrior, { it.toInt().toString() }, lowerIsBetter = true)?.let(::add)
+                    if (isEmpty()) {
+                        add(HealthMetricDisplay(label = "Stress", value = "no data"))
+                    }
+                },
+            ),
+            HealthSection(
+                title = "Training Readiness",
+                metrics = buildList {
+                    buildMetric("Readiness", readiness, readinessPrior, { it.toInt().toString() }, progress = readiness?.let { (it / 100.0).toFloat() })?.let(::add)
+                        ?: add(HealthMetricDisplay(label = "Readiness", value = "no data"))
+                },
+            ),
+            HealthSection(
                 title = "Endurance",
-                lines = buildList {
-                    endurance?.let { add("Endurance score: ${it.toInt()}") } ?: add("Endurance score: no data")
+                metrics = buildList {
+                    buildMetric("Endurance score", endurance, endurancePrior, { it.toInt().toString() }, progress = endurance?.let { (it / 100.0).toFloat() })?.let(::add)
+                        ?: add(HealthMetricDisplay(label = "Endurance", value = "no data"))
                 },
             ),
         )
@@ -217,7 +260,12 @@ object HealthAssessmentEngine {
         appendLine()
         assessment.sections.forEach { section ->
             appendLine("## ${section.title}")
+            section.metrics.forEach { metric ->
+                val change = metric.percentChange?.let { MetricChange.formatPercent(it) } ?: "n/a"
+                appendLine("- ${metric.label}: ${metric.value} (prior: ${metric.priorValue ?: "n/a"}, $change)")
+            }
             section.lines.forEach { appendLine("- $it") }
+            section.coachComments.forEach { appendLine("- Coach: $it") }
             appendLine()
         }
         appendLine("## Recommendations")
@@ -227,6 +275,25 @@ object HealthAssessmentEngine {
         appendLine()
         appendLine("## Data quality")
         assessment.dataQualityNotes.forEach { appendLine("- $it") }
+    }
+
+    private fun buildMetric(
+        label: String,
+        current: Double?,
+        prior: Double?,
+        format: (Double) -> String,
+        lowerIsBetter: Boolean = false,
+        progress: Float? = null,
+    ): HealthMetricDisplay? {
+        if (current == null) return null
+        return HealthMetricDisplay(
+            label = label,
+            value = format(current),
+            priorValue = prior?.let(format),
+            percentChange = prior?.let { MetricChange.percentChange(current, it) },
+            lowerIsBetter = lowerIsBetter,
+            progress = progress,
+        )
     }
 
     private fun latestMetric(metrics: List<HealthMetricPoint>, type: String): Double? =
@@ -250,6 +317,22 @@ object HealthAssessmentEngine {
         val cutoff = now.toLocalDate().minusDays(days)
         val values = metrics.filter {
             it.metricType == type && !it.date.toLocalDate().isBefore(cutoff)
+        }.map { it.value }
+        if (values.isEmpty()) return null
+        return values.average()
+    }
+
+    private fun previousAverageMetric(
+        metrics: List<HealthMetricPoint>,
+        type: String,
+        days: Long,
+        now: LocalDateTime,
+    ): Double? {
+        val end = now.toLocalDate().minusDays(days)
+        val start = end.minusDays(days)
+        val values = metrics.filter {
+            val day = it.date.toLocalDate()
+            it.metricType == type && !day.isBefore(start) && day.isBefore(end)
         }.map { it.value }
         if (values.isEmpty()) return null
         return values.average()

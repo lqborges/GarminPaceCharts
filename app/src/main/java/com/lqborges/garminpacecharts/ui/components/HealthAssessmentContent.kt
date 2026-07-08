@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
@@ -28,6 +29,7 @@ import com.lqborges.garminpacecharts.domain.ChartDataBuilder
 import com.lqborges.garminpacecharts.domain.HealthAssessmentEngine
 import com.lqborges.garminpacecharts.domain.model.DashboardStats
 import com.lqborges.garminpacecharts.domain.model.HealthAssessment
+import com.lqborges.garminpacecharts.domain.model.HealthMetricDisplay
 import com.lqborges.garminpacecharts.domain.model.HealthSection
 import java.time.Instant
 import java.time.ZoneId
@@ -129,10 +131,10 @@ private fun StatusHeroCard(
         assessment.overallStatus.contains("attention", ignoreCase = true) -> StatusAttention
         else -> StatusStable
     }
-    val vo2Line = assessment.sections.firstOrNull { it.title == "Cardio" }
-        ?.lines?.firstOrNull { it.startsWith("VO2") }
-    val restingHrLine = assessment.sections.firstOrNull { it.title == "Cardio" }
-        ?.lines?.firstOrNull { it.startsWith("Resting HR") }
+    val cardioMetrics = assessment.sections.firstOrNull { it.title == "Cardio" }?.metrics.orEmpty()
+    val vo2Value = cardioMetrics.firstOrNull { it.label == "VO2 max" }?.value
+    val restingHrValue = cardioMetrics.firstOrNull { it.label == "Resting HR" }
+    val weeklyRhr = cardioMetrics.firstOrNull { it.label == "Resting HR (week avg)" }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -176,14 +178,36 @@ private fun StatusHeroCard(
             ) {
                 HeroMetric(
                     label = "VO₂ max",
-                    value = vo2Line?.substringAfter(": ")?.takeIf { it != "no data" } ?: "—",
+                    value = vo2Value?.takeIf { it != "no data" } ?: "—",
                     modifier = Modifier.weight(1f),
                 )
                 HeroMetric(
                     label = "Resting HR",
-                    value = restingHrLine?.substringAfter(": ")?.takeIf { it != "no data" } ?: "—",
+                    value = restingHrValue?.value?.takeIf { it != "no data" } ?: "—",
+                    metric = restingHrValue,
                     modifier = Modifier.weight(1f),
                 )
+            }
+
+            weeklyRhr?.let { metric ->
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        metric.value,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.9f),
+                    )
+                    metric.progress?.let { progress ->
+                        LinearProgressIndicator(
+                            progress = { progress.coerceIn(0f, 1f) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(6.dp)
+                                .clip(RoundedCornerShape(3.dp)),
+                            color = StatusGood,
+                            trackColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.15f),
+                        )
+                    }
+                }
             }
 
             stats?.let { runningStats(it) }
@@ -231,6 +255,7 @@ private fun runningStats(stats: DashboardStats) {
 private fun HeroMetric(
     label: String,
     value: String,
+    metric: HealthMetricDisplay? = null,
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -238,9 +263,15 @@ private fun HeroMetric(
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.55f),
     ) {
-        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            metric?.percentChange?.let {
+                PercentChangeBadge(
+                    percentChange = it,
+                    lowerIsBetter = metric.lowerIsBetter,
+                )
+            }
         }
     }
 }
@@ -277,27 +308,23 @@ private fun MetricSectionCard(section: HealthSection) {
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
             )
-            section.lines.forEach { line ->
-                MetricLine(line = line)
+            if (section.metrics.isNotEmpty()) {
+                section.metrics.forEach { metric ->
+                    MetricRow(metric = metric)
+                }
+            } else {
+                section.lines.forEach { line ->
+                    Text(line, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+            if (section.coachComments.isNotEmpty()) {
+                HorizontalDivider()
+                Text("Sleep coach", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                section.coachComments.forEach { comment ->
+                    Text("• $comment", style = MaterialTheme.typography.bodySmall)
+                }
             }
         }
-    }
-}
-
-@Composable
-private fun MetricLine(line: String) {
-    val parts = line.split(": ", limit = 2)
-    if (parts.size == 2) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(parts[0], style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(parts[1], style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-        }
-    } else {
-        Text(line, style = MaterialTheme.typography.bodyMedium)
     }
 }
 

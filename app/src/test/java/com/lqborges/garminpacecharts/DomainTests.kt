@@ -9,9 +9,11 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import com.lqborges.garminpacecharts.domain.MetricChange
 import com.lqborges.garminpacecharts.domain.WeatherFormatter
 import com.lqborges.garminpacecharts.domain.WeatherParser
 import com.lqborges.garminpacecharts.domain.WellnessMetricParser
+import com.lqborges.garminpacecharts.domain.WellnessStatsBuilder
 import java.time.LocalDateTime
 
 class PaceExtractorTest {
@@ -158,6 +160,15 @@ class DateParserTest {
     }
 }
 
+class MetricChangeTest {
+    @Test
+    fun percentChange_formatsSignedDelta() {
+        assertEquals(17.14, MetricChange.percentChange(82.0, 70.0)!!, 0.01)
+        assertEquals("+17%", MetricChange.formatPercent(17.0))
+        assertEquals("-30%", MetricChange.formatPercent(-30.0))
+    }
+}
+
 class WeatherParserTest {
     @Test
     fun fromOpenMeteo_parsesTemperatureAndNextHourRainChance() {
@@ -226,7 +237,7 @@ class WellnessMetricParserTest {
         )
         val assessment = HealthAssessmentEngine.generate(emptyList(), metrics)
         val cardio = assessment.sections.first { it.title == "Cardio" }
-        assertTrue(cardio.lines.any { it == "VO2 max: 49" })
+        assertEquals("49", cardio.metrics.first { it.label == "VO2 max" }.value)
     }
 }
 
@@ -284,18 +295,14 @@ class ChartDataBuilderTest {
     }
 
     @Test
-    fun healthAssessment_includesJulyWorkoutInFourWeekCount() {
-        val workouts = listOf(
-            workout("2026-07-05T07:23:05", 7.88),
-        )
+    fun healthAssessment_omitsActivitySection() {
+        val workouts = listOf(workout("2026-07-05T07:23:05", 7.88))
         val assessment = HealthAssessmentEngine.generate(
             workouts,
             metrics = emptyList(),
             now = LocalDateTime.parse("2026-07-07T22:00:00"),
         )
-        val activity = assessment.sections.first { it.title == "Activity" }
-        assertTrue(activity.lines.any { it.contains("Progression A (4w): 1") })
-        assertTrue(activity.lines.any { it.contains("Latest pace") })
+        assertTrue(assessment.sections.none { it.title == "Activity" })
         val profile = assessment.sections.first { it.title == "Profile" }
         assertTrue(profile.lines.any { it.contains("Data through: 2026-07-05") })
     }
@@ -371,33 +378,51 @@ class ChartDataBuilderTest {
     }
 
     @Test
-    fun healthAssessment_showsLastNightAndSevenDayAverage() {
+    fun healthAssessment_showsPriorDayAndPercentChange() {
         val now = LocalDateTime.parse("2026-07-07T08:00:00")
         val metrics = listOf(
             metric("SLEEP_SCORE", "2026-07-07T00:00:00", 82.0),
-            metric("SLEEP_DURATION", "2026-07-07T00:00:00", 7.4),
             metric("SLEEP_SCORE", "2026-07-06T00:00:00", 70.0),
-            metric("SLEEP_DURATION", "2026-07-06T00:00:00", 6.8),
-            metric("SLEEP_SCORE", "2026-07-05T00:00:00", 74.0),
-            metric("STEPS", "2026-07-06T00:00:00", 9100.0),
-            metric("STEPS", "2026-07-05T00:00:00", 8400.0),
             metric("STRESS", "2026-07-06T00:00:00", 28.0),
-            metric("STRESS", "2026-07-05T00:00:00", 31.0),
+            metric("STRESS", "2026-07-05T00:00:00", 40.0),
             metric("TRAINING_READINESS", "2026-07-07T00:00:00", 68.0),
             metric("TRAINING_READINESS", "2026-07-06T00:00:00", 55.0),
+            metric("RESTING_HR", "2026-07-07T00:00:00", 58.0),
+            metric("RESTING_HR", "2026-07-06T00:00:00", 60.0),
+            metric("RESTING_HR", "2026-07-05T00:00:00", 62.0),
+            metric("RESTING_HR", "2026-06-30T00:00:00", 65.0),
         )
         val assessment = HealthAssessmentEngine.generate(emptyList(), metrics, now)
         val sleep = assessment.sections.first { it.title == "Sleep" }
-        assertTrue(sleep.lines.any { it == "Sleep score (last night): 82" })
-        assertTrue(sleep.lines.any { it.startsWith("Sleep score (7d avg):") })
-        assertTrue(sleep.lines.any { it == "Sleep duration (last night): 7.4 h" })
-        val activity = assessment.sections.first { it.title == "Activity" }
-        assertTrue(activity.lines.any { it == "Steps (last day): 9100" })
-        assertTrue(activity.lines.any { it.startsWith("Steps (7d avg):") })
+        val sleepScore = sleep.metrics.first { it.label == "Sleep score (last night)" }
+        assertEquals("82", sleepScore.value)
+        assertEquals("70", sleepScore.priorValue)
+        assertEquals(17, sleepScore.percentChange!!.toInt())
+        assertTrue(sleep.coachComments.isNotEmpty())
         val stress = assessment.sections.first { it.title == "Stress / Recovery" }
-        assertTrue(stress.lines.any { it == "Stress (last day): 28" })
+        val stressMetric = stress.metrics.first { it.label == "Stress (last day)" }
+        assertEquals(-30, stressMetric.percentChange!!.toInt())
         val readiness = assessment.sections.first { it.title == "Training Readiness" }
-        assertTrue(readiness.lines.any { it == "Readiness: 68 (prior day 55)" })
+        assertEquals("68", readiness.metrics.first().value)
+        assertEquals("55", readiness.metrics.first().priorValue)
+        val cardio = assessment.sections.first { it.title == "Cardio" }
+        assertTrue(cardio.metrics.any { it.label == "Resting HR (week avg)" })
+    }
+
+    @Test
+    fun weeklyRhrRank_ranksLowerValuesHigher() {
+        val now = LocalDateTime.parse("2026-07-07T08:00:00")
+        val metrics = listOf(
+            metric("RESTING_HR", "2026-07-06T00:00:00", 55.0),
+            metric("RESTING_HR", "2026-07-05T00:00:00", 56.0),
+            metric("RESTING_HR", "2026-06-30T00:00:00", 62.0),
+            metric("RESTING_HR", "2026-06-29T00:00:00", 63.0),
+            metric("RESTING_HR", "2026-06-23T00:00:00", 70.0),
+            metric("RESTING_HR", "2026-06-22T00:00:00", 71.0),
+        )
+        val rank = WellnessStatsBuilder.weeklyValueRank(metrics, "RESTING_HR", now, lowerIsBetter = true)
+        assertNotNull(rank)
+        assertEquals(1, rank!!.rank)
     }
 
     private fun weekBucket(year: Int, month: Int, week: Int, label: String) =

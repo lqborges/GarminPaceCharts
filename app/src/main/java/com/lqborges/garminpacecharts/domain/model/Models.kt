@@ -142,9 +142,21 @@ data class HealthAssessment(
 )
 
 @Serializable
+data class HealthMetricDisplay(
+    val label: String,
+    val value: String,
+    val priorValue: String? = null,
+    val percentChange: Double? = null,
+    val lowerIsBetter: Boolean = false,
+    val progress: Float? = null,
+)
+
+@Serializable
 data class HealthSection(
     val title: String,
-    val lines: List<String>,
+    val lines: List<String> = emptyList(),
+    val metrics: List<HealthMetricDisplay> = emptyList(),
+    val coachComments: List<String> = emptyList(),
 )
 
 data class HealthMetricPoint(
