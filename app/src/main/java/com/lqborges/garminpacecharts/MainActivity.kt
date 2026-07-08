@@ -27,7 +27,6 @@ import com.lqborges.garminpacecharts.ui.AppViewModel
 import com.lqborges.garminpacecharts.ui.AppViewModelFactory
 import com.lqborges.garminpacecharts.ui.navigation.Routes
 import com.lqborges.garminpacecharts.ui.screens.ChartsScreen
-import com.lqborges.garminpacecharts.ui.screens.HealthScreen
 import com.lqborges.garminpacecharts.ui.screens.HomeScreen
 import com.lqborges.garminpacecharts.ui.screens.RefreshScreen
 import com.lqborges.garminpacecharts.ui.screens.SettingsScreen
@@ -59,8 +58,7 @@ class MainActivity : ComponentActivity() {
                 val importResult by viewModel.importResult.collectAsState()
                 val refreshSummary by viewModel.refreshSummary.collectAsState()
                 val message by viewModel.message.collectAsState()
-
-                var isRefreshing by remember { mutableStateOf(false) }
+                val isRefreshing by viewModel.isRefreshing.collectAsState()
 
                 val importJsonLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.OpenDocument(),
@@ -144,9 +142,8 @@ class MainActivity : ComponentActivity() {
                             HomeScreen(
                                 stats = dashboardStats,
                                 health = healthAssessment,
-                                onRefresh = { navController.navigate(Routes.REFRESH) },
+                                isRefreshing = isRefreshing,
                                 onCharts = { navController.navigate(Routes.CHARTS) },
-                                onHealth = { navController.navigate(Routes.HEALTH) },
                                 onSettings = { navController.navigate(Routes.SETTINGS) },
                             )
                         }
@@ -182,22 +179,12 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                         }
-                        composable(Routes.HEALTH) {
-                            HealthScreen(
-                                assessment = healthAssessment,
-                                onRegenerate = { viewModel.regenerateHealthAssessment() },
-                            )
-                        }
                         composable(Routes.REFRESH) {
                             RefreshScreen(
                                 summary = refreshSummary,
                                 isRefreshing = isRefreshing,
                                 onRefresh = {
-                                    scope.launch {
-                                        isRefreshing = true
-                                        viewModel.refresh()
-                                        isRefreshing = false
-                                    }
+                                    scope.launch { viewModel.refresh() }
                                 },
                                 onDone = { navController.popBackStack() },
                             )
@@ -205,6 +192,8 @@ class MainActivity : ComponentActivity() {
                         composable(Routes.SETTINGS) {
                             SettingsScreen(
                                 garminConnected = container.isGarminConnected(),
+                                isRefreshing = isRefreshing,
+                                onSyncGarmin = { scope.launch { viewModel.refresh() } },
                                 onImportJson = { importJsonLauncher.launch(arrayOf("application/json", "text/*", "*/*")) },
                                 onImportTokens = { importTokenLauncher.launch(arrayOf("application/json", "text/*", "*/*")) },
                                 onExportJson = { exportJsonLauncher.launch("progression_a_workouts.json") },

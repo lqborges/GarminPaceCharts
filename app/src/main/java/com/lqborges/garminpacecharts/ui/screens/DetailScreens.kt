@@ -15,9 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.lqborges.garminpacecharts.BuildConfig
-import com.lqborges.garminpacecharts.domain.HealthAssessmentEngine
 import com.lqborges.garminpacecharts.domain.PaceFormatter
-import com.lqborges.garminpacecharts.domain.model.HealthAssessment
 import com.lqborges.garminpacecharts.domain.model.Workout
 
 @Composable
@@ -42,67 +40,6 @@ fun WorkoutDetailScreen(
         }
         Button(onClick = onDelete, modifier = Modifier.fillMaxWidth()) { Text("Delete local workout") }
         Button(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Back") }
-    }
-}
-
-@Composable
-fun HealthScreen(
-    assessment: HealthAssessment?,
-    onRegenerate: () -> Unit = {},
-) {
-    Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Text("Health assessment", style = MaterialTheme.typography.headlineMedium)
-        Button(onClick = onRegenerate, modifier = Modifier.fillMaxWidth()) {
-            Text("Regenerate from latest data")
-        }
-        if (assessment == null) {
-            Text("No assessment yet. Import workouts or refresh Garmin data.")
-            return
-        }
-
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text("Status: ${assessment.overallStatus}", style = MaterialTheme.typography.titleMedium)
-                Text(assessment.summary)
-                Text("Confidence: ${assessment.confidence}")
-                Text(
-                    "Generated: ${assessment.generatedAt}",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                assessment.dataEndDate?.let {
-                    Text("Data through: $it", style = MaterialTheme.typography.bodySmall)
-                }
-            }
-        }
-
-        assessment.sections.forEach { section ->
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(section.title, style = MaterialTheme.typography.titleMedium)
-                    section.lines.forEach { Text("• $it") }
-                }
-            }
-        }
-
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text("Recommendations", style = MaterialTheme.typography.titleMedium)
-                assessment.recommendations.forEachIndexed { index, rec ->
-                    Text("${index + 1}. $rec")
-                }
-            }
-        }
-
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text("Data quality", style = MaterialTheme.typography.titleMedium)
-                assessment.dataQualityNotes.forEach { Text("• $it") }
-                Text(HealthAssessmentEngine.DISCLAIMER, style = MaterialTheme.typography.bodySmall)
-            }
-        }
     }
 }
 
@@ -150,6 +87,8 @@ fun RefreshScreen(
 @Composable
 fun SettingsScreen(
     garminConnected: Boolean,
+    isRefreshing: Boolean,
+    onSyncGarmin: () -> Unit,
     onImportJson: () -> Unit,
     onImportTokens: () -> Unit,
     onExportJson: () -> Unit,
@@ -163,6 +102,13 @@ fun SettingsScreen(
         Text("Settings", style = MaterialTheme.typography.headlineMedium)
         Text("Version ${BuildConfig.VERSION_NAME} (${BuildConfig.BUILD_LABEL})")
         Text("Garmin: ${if (garminConnected) "connected" else "not connected"}")
+        Button(
+            onClick = onSyncGarmin,
+            enabled = garminConnected && !isRefreshing,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(if (isRefreshing) "Syncing…" else "Sync Garmin now")
+        }
         Button(onClick = onImportJson, modifier = Modifier.fillMaxWidth()) { Text("Import workouts JSON") }
         Button(onClick = onImportTokens, modifier = Modifier.fillMaxWidth()) { Text("Import Garmin tokens") }
         Button(onClick = onExportJson, modifier = Modifier.fillMaxWidth()) { Text("Export workouts JSON") }

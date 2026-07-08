@@ -322,8 +322,7 @@ class ChartDataBuilderTest {
         val stress = assessment.sections.first { it.title == "Stress / Recovery" }
         assertTrue(stress.lines.any { it == "Stress (last day): 28" })
         val readiness = assessment.sections.first { it.title == "Training Readiness" }
-        assertTrue(readiness.lines.any { it == "Readiness (latest): 68" })
-        assertTrue(readiness.lines.any { it == "Readiness (prior day): 55" })
+        assertTrue(readiness.lines.any { it == "Readiness: 68 (prior day 55)" })
     }
 
     private fun weekBucket(year: Int, month: Int, week: Int, label: String) =

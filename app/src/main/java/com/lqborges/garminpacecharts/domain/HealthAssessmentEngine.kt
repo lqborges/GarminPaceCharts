@@ -165,9 +165,13 @@ object HealthAssessmentEngine {
             HealthSection(
                 title = "Training Readiness",
                 lines = buildList {
-                    readiness?.let { add("Readiness (latest): ${it.toInt()}") }
-                    readinessLastNight?.let { add("Readiness (prior day): ${it.toInt()}") }
-                    if (readiness == null && readinessLastNight == null) add("Readiness: no data")
+                    when {
+                        readiness != null && readinessLastNight != null && readinessLastNight != readiness ->
+                            add("Readiness: ${readiness.toInt()} (prior day ${readinessLastNight.toInt()})")
+                        readiness != null -> add("Readiness: ${readiness.toInt()}")
+                        readinessLastNight != null -> add("Readiness: ${readinessLastNight.toInt()}")
+                        else -> add("Readiness: no data")
+                    }
                 },
             ),
             HealthSection(
@@ -187,7 +191,6 @@ object HealthAssessmentEngine {
         val dataQualityNotes = buildList {
             if (metrics.isEmpty()) add("No Garmin wellness metrics imported yet; assessment uses workout data only.")
             if (workouts.isEmpty()) add("No workouts available.")
-            add(DISCLAIMER)
         }
 
         return HealthAssessment(

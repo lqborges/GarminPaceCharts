@@ -17,11 +17,14 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.Instant
 
 class AppViewModel(private val container: AppContainer) : ViewModel() {
+    private var startupRefreshDone = false
+
     init {
         viewModelScope.launch {
             combine(
@@ -32,6 +35,9 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             }.collect { (workoutList, lastRefreshAt) ->
                 container.healthRepository.regenerateIfStale(workoutList, lastRefreshAt)
             }
+        }
+        viewModelScope.launch {
+            refreshOnStartupIfConfigured()
         }
     }
 
@@ -64,6 +70,9 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     private val _message = MutableStateFlow<String?>(null)
     val message = _message.asStateFlow()
 
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing = _isRefreshing.asStateFlow()
+
     fun setChartRange(range: ChartRange) {
         _chartRange.value = range
     }
@@ -88,9 +97,23 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     suspend fun exportJsonAsync(): String = container.workoutRepository.exportJson()
 
     suspend fun refresh(): RefreshSummary {
-        val summary = container.refreshRepository.refresh()
-        _refreshSummary.value = summary
-        return summary
+        _isRefreshing.value = true
+        try {
+            val summary = container.refreshRepository.refresh()
+            _refreshSummary.value = summary
+            container.healthRepository.regenerateAssessment()
+            return summary
+        } finally {
+            _isRefreshing.value = false
+        }
+    }
+
+    private suspend fun refreshOnStartupIfConfigured() {
+        if (startupRefreshDone) return
+        startupRefreshDone = true
+        val setupDone = container.preferencesManager.setupComplete.first()
+        if (!setupDone || !container.isGarminConnected()) return
+        refresh()
     }
 
     fun completeSetup() {
