@@ -84,7 +84,7 @@ object HealthAssessmentEngine {
 
         if (fourWeekCount >= 6) strengths.add("Running consistency")
         if (runningTrend == TrendDirection.IMPROVING) strengths.add("Progression A pace improving")
-        if (vo2 != null && vo2 >= 40) strengths.add("Strong VO2 max (${vo2.toInt()})")
+        if (vo2 != null && vo2 >= 40) strengths.add("Strong VO2 max (${WellnessMetricParser.formatVo2(vo2)})")
         val sleepScoreForSignals = sleepScoreLastNight ?: sleepScoreAvg
         if (sleepScoreForSignals != null && sleepScoreForSignals >= 75) strengths.add("Good recent sleep scores")
 
@@ -129,7 +129,7 @@ object HealthAssessmentEngine {
             HealthSection(
                 title = "Cardio",
                 lines = buildList {
-                    vo2?.let { add("VO2 max: ${it.toInt()}") } ?: add("VO2 max: no data")
+                    vo2?.let { add("VO2 max: ${WellnessMetricParser.formatVo2(it)}") } ?: add("VO2 max: no data")
                     restingHr?.let { add("Resting HR: ${it.toInt()} bpm") } ?: add("Resting HR: no data")
                 },
             ),

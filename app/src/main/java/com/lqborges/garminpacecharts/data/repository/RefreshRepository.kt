@@ -11,6 +11,7 @@ import com.lqborges.garminpacecharts.data.local.entity.RefreshRunEntity
 import com.lqborges.garminpacecharts.domain.GarminActivityParser
 import com.lqborges.garminpacecharts.domain.HealthAssessmentEngine
 import com.lqborges.garminpacecharts.domain.PaceExtractor
+import com.lqborges.garminpacecharts.domain.WellnessMetricParser
 import com.lqborges.garminpacecharts.domain.model.RefreshSummary
 import com.lqborges.garminpacecharts.domain.model.Workout
 import com.lqborges.garminpacecharts.domain.model.toEpochMillis
@@ -176,6 +177,7 @@ class RefreshRepository(
         var date = end
         while (!date.isBefore(start)) {
             val millis = date.atStartOfDay().toEpochMillis()
+            var vo2Added = false
             garminApiClient.fetchDailySummary(date)?.let { summary ->
                 summary["restingHeartRate"]?.jsonPrimitive?.intOrNull?.toDouble()?.let {
                     metrics.add(metric("RESTING_HR", millis, it, "bpm"))
@@ -186,10 +188,16 @@ class RefreshRepository(
                 summary["averageStressLevel"]?.jsonPrimitive?.intOrNull?.toDouble()?.let {
                     metrics.add(metric("STRESS", millis, it, "score"))
                 }
-                summary["vo2Max"]?.jsonPrimitive?.doubleOrNull?.let {
-                    metrics.add(metric("VO2_MAX", millis, it, "ml/kg/min"))
-                }
                 summary["vo2MaxPrecise"]?.jsonPrimitive?.doubleOrNull?.let {
+                    metrics.add(metric("VO2_MAX", millis, it, "ml/kg/min"))
+                    vo2Added = true
+                } ?: summary["vo2Max"]?.jsonPrimitive?.doubleOrNull?.let {
+                    metrics.add(metric("VO2_MAX", millis, it, "ml/kg/min"))
+                    vo2Added = true
+                }
+            }
+            if (!vo2Added) {
+                WellnessMetricParser.vo2FromMaxMet(garminApiClient.fetchMaxMetDaily(date))?.let {
                     metrics.add(metric("VO2_MAX", millis, it, "ml/kg/min"))
                 }
             }

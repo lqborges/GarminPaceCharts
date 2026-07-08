@@ -91,6 +91,11 @@ class GarminApiClient(
             connectApiRaw("/metrics-service/metrics/endurancescore?calendarDate=$date").jsonObject
         }.getOrNull()
 
+    fun fetchMaxMetDaily(date: LocalDate): JsonElement? =
+        runCatching {
+            connectApiRaw("/metrics-service/metrics/maxmet/daily/$date/$date")
+        }.getOrNull()
+
     private fun encodedDisplayName(): String {
         val name = requireDisplayName()
         return URLEncoder.encode(name, StandardCharsets.UTF_8.toString())

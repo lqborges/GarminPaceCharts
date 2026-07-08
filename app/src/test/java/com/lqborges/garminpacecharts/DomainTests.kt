@@ -9,6 +9,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import com.lqborges.garminpacecharts.domain.WellnessMetricParser
 import java.time.LocalDateTime
 
 class PaceExtractorTest {
@@ -152,6 +153,40 @@ class DateParserTest {
             LocalDateTime.of(2026, 7, 5, 7, 23, 5),
             DateParser.parseLocalDateTime("2026-07-05 07:23:05"),
         )
+    }
+}
+
+class WellnessMetricParserTest {
+    @Test
+    fun vo2FromMaxMet_readsGenericVo2MaxPreciseValue() {
+        val json = """
+            [
+              {
+                "generic": {
+                  "calendarDate": "2026-07-05",
+                  "vo2MaxPreciseValue": 49.0,
+                  "vo2MaxValue": 49.0
+                }
+              }
+            ]
+        """.trimIndent()
+        val element = kotlinx.serialization.json.Json.parseToJsonElement(json)
+        assertEquals(49.0, WellnessMetricParser.vo2FromMaxMet(element)!!, 0.01)
+    }
+
+    @Test
+    fun healthAssessment_includesVo2MaxFromMetrics() {
+        val metrics = listOf(
+            com.lqborges.garminpacecharts.domain.model.HealthMetricPoint(
+                metricType = "VO2_MAX",
+                date = LocalDateTime.parse("2026-07-05T00:00:00"),
+                value = 49.0,
+                unit = "ml/kg/min",
+            ),
+        )
+        val assessment = HealthAssessmentEngine.generate(emptyList(), metrics)
+        val cardio = assessment.sections.first { it.title == "Cardio" }
+        assertTrue(cardio.lines.any { it == "VO2 max: 49" })
     }
 }
 
