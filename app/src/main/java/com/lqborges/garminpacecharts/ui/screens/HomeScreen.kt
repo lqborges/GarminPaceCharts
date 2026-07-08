@@ -17,13 +17,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.lqborges.garminpacecharts.domain.model.DashboardStats
 import com.lqborges.garminpacecharts.domain.model.HealthAssessment
+import com.lqborges.garminpacecharts.domain.model.WeatherSnapshot
 import com.lqborges.garminpacecharts.ui.components.HealthAssessmentContent
+import com.lqborges.garminpacecharts.ui.components.WeatherSnapshotCard
 
 @Composable
 fun HomeScreen(
     stats: DashboardStats?,
     health: HealthAssessment?,
+    weather: WeatherSnapshot?,
     isRefreshing: Boolean,
+    isWeatherLoading: Boolean,
     onCharts: () -> Unit,
     onSettings: () -> Unit,
 ) {
@@ -31,6 +35,11 @@ fun HomeScreen(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        WeatherSnapshotCard(
+            snapshot = weather,
+            isLoading = isWeatherLoading,
+        )
+
         Text(
             "Health",
             style = MaterialTheme.typography.headlineMedium,

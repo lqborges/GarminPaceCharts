@@ -7,7 +7,9 @@ import com.lqborges.garminpacecharts.data.local.AppDatabase
 import com.lqborges.garminpacecharts.data.local.PreferencesManager
 import com.lqborges.garminpacecharts.data.repository.HealthRepository
 import com.lqborges.garminpacecharts.data.repository.RefreshRepository
+import com.lqborges.garminpacecharts.data.repository.WeatherRepository
 import com.lqborges.garminpacecharts.data.repository.WorkoutRepository
+import com.lqborges.garminpacecharts.data.weather.OpenMeteoClient
 
 class AppContainer(context: Context) {
     private val appContext = context.applicationContext
@@ -19,6 +21,7 @@ class AppContainer(context: Context) {
 
     val workoutRepository = WorkoutRepository(database, preferencesManager)
     val healthRepository = HealthRepository(database, workoutRepository)
+    val weatherRepository = WeatherRepository(OpenMeteoClient(), preferencesManager)
     val refreshRepository = RefreshRepository(
         database = database,
         workoutRepository = workoutRepository,

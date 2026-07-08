@@ -9,6 +9,8 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import com.lqborges.garminpacecharts.domain.WeatherFormatter
+import com.lqborges.garminpacecharts.domain.WeatherParser
 import com.lqborges.garminpacecharts.domain.WellnessMetricParser
 import java.time.LocalDateTime
 
@@ -153,6 +155,32 @@ class DateParserTest {
             LocalDateTime.of(2026, 7, 5, 7, 23, 5),
             DateParser.parseLocalDateTime("2026-07-05 07:23:05"),
         )
+    }
+}
+
+class WeatherParserTest {
+    @Test
+    fun fromOpenMeteo_parsesCurrentConditions() {
+        val json = """
+            {
+              "current": {
+                "time": "2026-07-08T07:00",
+                "temperature_2m": 14.2,
+                "apparent_temperature": 13.1,
+                "relative_humidity_2m": 72,
+                "precipitation": 0.0,
+                "weather_code": 2,
+                "wind_speed_10m": 11.5
+              }
+            }
+        """.trimIndent()
+        val body = kotlinx.serialization.json.Json.parseToJsonElement(json).jsonObject
+        val snapshot = WeatherParser.fromOpenMeteo(body, "Sheffield")
+        assertNotNull(snapshot)
+        assertEquals("Sheffield", snapshot!!.locationName)
+        assertEquals(14.2, snapshot.temperatureC, 0.01)
+        assertEquals(2, snapshot.weatherCode)
+        assertEquals("Partly cloudy", WeatherFormatter.describeWeather(snapshot.weatherCode))
     }
 }
 

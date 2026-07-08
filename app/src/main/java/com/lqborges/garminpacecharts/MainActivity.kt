@@ -59,6 +59,8 @@ class MainActivity : ComponentActivity() {
                 val refreshSummary by viewModel.refreshSummary.collectAsState()
                 val message by viewModel.message.collectAsState()
                 val isRefreshing by viewModel.isRefreshing.collectAsState()
+                val weatherSnapshot by viewModel.weatherSnapshot.collectAsState()
+                val isWeatherLoading by viewModel.isWeatherLoading.collectAsState()
 
                 val importJsonLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.OpenDocument(),
@@ -142,7 +144,9 @@ class MainActivity : ComponentActivity() {
                             HomeScreen(
                                 stats = dashboardStats,
                                 health = healthAssessment,
+                                weather = weatherSnapshot,
                                 isRefreshing = isRefreshing,
+                                isWeatherLoading = isWeatherLoading,
                                 onCharts = { navController.navigate(Routes.CHARTS) },
                                 onSettings = { navController.navigate(Routes.SETTINGS) },
                             )

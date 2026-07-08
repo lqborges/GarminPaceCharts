@@ -7,8 +7,12 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.lqborges.garminpacecharts.domain.model.WeatherSnapshot
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 private val Context.dataStore by preferencesDataStore(name = "app_preferences")
 
@@ -19,7 +23,10 @@ class PreferencesManager(private val context: Context) {
         val PACE_MIN = doublePreferencesKey("pace_min")
         val PACE_MAX = doublePreferencesKey("pace_max")
         val LAST_REFRESH_AT = longPreferencesKey("last_refresh_at")
+        val WEATHER_SNAPSHOT_JSON = stringPreferencesKey("weather_snapshot_json")
     }
+
+    private val json = Json { ignoreUnknownKeys = true }
 
     val setupComplete: Flow<Boolean> = context.dataStore.data.map { it[Keys.SETUP_COMPLETE] ?: false }
     val activityFilter: Flow<String> = context.dataStore.data.map {
@@ -32,6 +39,12 @@ class PreferencesManager(private val context: Context) {
         it[Keys.PACE_MAX] ?: com.lqborges.garminpacecharts.domain.PaceExtractor.MAX_PACE
     }
     val lastRefreshAt: Flow<Long?> = context.dataStore.data.map { it[Keys.LAST_REFRESH_AT] }
+
+    val weatherSnapshot: Flow<WeatherSnapshot?> = context.dataStore.data.map { prefs ->
+        prefs[Keys.WEATHER_SNAPSHOT_JSON]?.let { raw ->
+            runCatching { json.decodeFromString<WeatherSnapshot>(raw) }.getOrNull()
+        }
+    }
 
     suspend fun setSetupComplete(value: Boolean) {
         context.dataStore.edit { it[Keys.SETUP_COMPLETE] = value }
@@ -50,5 +63,13 @@ class PreferencesManager(private val context: Context) {
 
     suspend fun setLastRefreshAt(epochMillis: Long) {
         context.dataStore.edit { it[Keys.LAST_REFRESH_AT] = epochMillis }
+    }
+
+    suspend fun getWeatherSnapshot(): WeatherSnapshot? = weatherSnapshot.first()
+
+    suspend fun setWeatherSnapshot(snapshot: WeatherSnapshot) {
+        context.dataStore.edit {
+            it[Keys.WEATHER_SNAPSHOT_JSON] = json.encodeToString(snapshot)
+        }
     }
 }

@@ -11,6 +11,7 @@ import com.lqborges.garminpacecharts.domain.model.DashboardStats
 import com.lqborges.garminpacecharts.domain.model.HealthAssessment
 import com.lqborges.garminpacecharts.domain.model.ImportResult
 import com.lqborges.garminpacecharts.domain.model.RefreshSummary
+import com.lqborges.garminpacecharts.domain.model.WeatherSnapshot
 import com.lqborges.garminpacecharts.domain.model.Workout
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -38,6 +39,9 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         }
         viewModelScope.launch {
             refreshOnStartupIfConfigured()
+        }
+        viewModelScope.launch {
+            refreshWeatherOnStartup()
         }
     }
 
@@ -73,6 +77,12 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing = _isRefreshing.asStateFlow()
 
+    private val _isWeatherLoading = MutableStateFlow(false)
+    val isWeatherLoading = _isWeatherLoading.asStateFlow()
+
+    val weatherSnapshot = container.weatherRepository.snapshot
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
     fun setChartRange(range: ChartRange) {
         _chartRange.value = range
     }
@@ -102,10 +112,26 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             val summary = container.refreshRepository.refresh()
             _refreshSummary.value = summary
             container.healthRepository.regenerateAssessment()
+            refreshWeather()
             return summary
         } finally {
             _isRefreshing.value = false
         }
+    }
+
+    private suspend fun refreshWeather() {
+        _isWeatherLoading.value = true
+        try {
+            container.weatherRepository.refreshIfStale()
+        } finally {
+            _isWeatherLoading.value = false
+        }
+    }
+
+    private suspend fun refreshWeatherOnStartup() {
+        val setupDone = container.preferencesManager.setupComplete.first()
+        if (!setupDone) return
+        refreshWeather()
     }
 
     private suspend fun refreshOnStartupIfConfigured() {

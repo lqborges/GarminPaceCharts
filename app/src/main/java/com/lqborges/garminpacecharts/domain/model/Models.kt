@@ -94,6 +94,19 @@ data class ChartData(
     val showPointLabels: Boolean,
 )
 
+@kotlinx.serialization.Serializable
+data class WeatherSnapshot(
+    val locationName: String,
+    val temperatureC: Double,
+    val apparentTemperatureC: Double,
+    val humidityPercent: Int,
+    val windSpeedKmh: Double,
+    val precipitationMm: Double,
+    val weatherCode: Int,
+    val observedAt: String,
+    val fetchedAtEpochMillis: Long = System.currentTimeMillis(),
+)
+
 data class WeeklyPaceRank(
     val pace: Double,
     val rank: Int,
