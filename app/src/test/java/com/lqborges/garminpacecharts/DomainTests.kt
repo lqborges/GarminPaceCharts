@@ -357,6 +357,36 @@ class ChartDataBuilderTest {
     }
 
     @Test
+    fun fastestWorkout_isTheLowestPaceInTheWeek() {
+        val workouts = listOf(
+            workout("2026-07-01T08:00:00", 6.5),
+            workout("2026-07-03T08:00:00", 5.9),
+            workout("2026-07-04T08:00:00", 6.1),
+        )
+        val peak = ChartDataBuilder.fastestWorkout(workouts)
+        assertNotNull(peak)
+        assertEquals(5.9, peak!!.paceMinPerKm, 0.001)
+        assertEquals(LocalDateTime.parse("2026-07-03T08:00:00"), peak.startTimeLocal)
+    }
+
+    @Test
+    fun lastYearAndAllTime_stillGroupEveryWeek() {
+        val workouts = listOf(
+            workout("2024-01-15T08:00:00", 6.8),
+            workout("2025-08-20T08:00:00", 6.4),
+            workout("2026-07-01T08:00:00", 5.8),
+            workout("2026-07-03T08:00:00", 6.0),
+        )
+        val now = LocalDateTime.parse("2026-07-07T08:00:00")
+        val year = ChartDataBuilder.build(workouts, com.lqborges.garminpacecharts.ChartRange.LAST_YEAR, now)
+        val allTime = ChartDataBuilder.build(workouts, com.lqborges.garminpacecharts.ChartRange.ALL_TIME, now)
+        assertEquals(2, year.weeks.size)
+        assertEquals(3, allTime.weeks.size)
+        assertEquals(5.8, ChartDataBuilder.fastestWorkout(year.weeks.last().workouts)!!.paceMinPerKm, 0.001)
+        assertEquals(5.8, ChartDataBuilder.fastestWorkout(allTime.weeks.last().workouts)!!.paceMinPerKm, 0.001)
+    }
+
+    @Test
     fun weekLabelStride_increasesWhenZoomedOut() {
         assertEquals(1, ChartDataBuilder.weekLabelStride(weekWidthPx = 80f, minLabelSpacingPx = 52f))
         assertEquals(2, ChartDataBuilder.weekLabelStride(weekWidthPx = 40f, minLabelSpacingPx = 52f))

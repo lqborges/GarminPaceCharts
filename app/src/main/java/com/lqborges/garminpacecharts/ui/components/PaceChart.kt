@@ -245,18 +245,21 @@ fun PaceChart(
                     )
 
                     val offsets = ChartDataBuilder.calculateOffsets(week.workouts.size)
+                    val peak = ChartDataBuilder.fastestWorkout(week.workouts)
                     week.workouts.forEachIndexed { pointIndex, workout ->
                         val x = xCenter + offsets[pointIndex] * weekWidthPx
                         val y = paceY(workout.paceMinPerKm)
                         drawCircle(color = color, radius = 6f, center = Offset(x, y))
                         drawCircle(color = Color.White, radius = 4f, center = Offset(x, y))
 
-                        if (chartData.showPointLabels && drawTextLabels) {
+                        val isPeak = workout === peak
+                        val showThisLabel = drawTextLabels && (chartData.showPointLabels || isPeak)
+                        if (showThisLabel) {
                             drawContext.canvas.nativeCanvas.drawText(
                                 PaceFormatter.toDisplay(workout.paceMinPerKm),
                                 x,
                                 y - 10f,
-                                textPaints.pointLabel,
+                                if (isPeak) textPaints.averagePace else textPaints.pointLabel,
                             )
                         }
                     }

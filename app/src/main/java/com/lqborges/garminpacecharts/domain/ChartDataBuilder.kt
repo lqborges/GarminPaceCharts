@@ -100,6 +100,10 @@ object ChartDataBuilder {
         }
     }
 
+    /** Fastest workout in the week — the visually highest chart point (lower min/km). */
+    fun fastestWorkout(workouts: List<Workout>): Workout? =
+        workouts.minByOrNull { it.paceMinPerKm }
+
     fun fourWeekAveragePace(workouts: List<Workout>, now: LocalDateTime = LocalDateTime.now()): Double? {
         val cutoff = now.toLocalDate().minusWeeks(4)
         val recent = workouts.filter { it.startTimeLocal.toLocalDate() >= cutoff }
