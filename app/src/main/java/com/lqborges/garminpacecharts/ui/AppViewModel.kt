@@ -123,6 +123,8 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         _isWeatherLoading.value = true
         try {
             container.weatherRepository.refreshIfStale()
+        } catch (_: Exception) {
+            // Weather is optional. TLS/network faults must not crash launch or Garmin refresh.
         } finally {
             _isWeatherLoading.value = false
         }
