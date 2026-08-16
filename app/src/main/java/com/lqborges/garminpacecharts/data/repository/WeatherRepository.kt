@@ -33,10 +33,14 @@ class WeatherRepository(
         longitude: Double = RunningLocations.SHEFFIELD_LON,
         locationName: String = RunningLocations.SHEFFIELD_NAME,
     ): WeatherSnapshot? = withContext(Dispatchers.IO) {
-        val body = openMeteoClient.fetchCurrent(latitude, longitude) ?: return@withContext null
-        val snapshot = WeatherParser.fromOpenMeteo(body, locationName) ?: return@withContext null
-        preferencesManager.setWeatherSnapshot(snapshot)
-        snapshot
+        runCatching {
+            val body = openMeteoClient.fetchCurrent(latitude, longitude) ?: return@runCatching null
+            val snapshot = WeatherParser.fromOpenMeteo(body, locationName) ?: return@runCatching null
+            preferencesManager.setWeatherSnapshot(snapshot)
+            snapshot
+        }.getOrElse {
+            preferencesManager.getWeatherSnapshot()
+        }
     }
 
     private fun ageMinutes(snapshot: WeatherSnapshot): Long =
