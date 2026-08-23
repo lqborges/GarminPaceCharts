@@ -63,6 +63,17 @@ interface HealthMetricDao {
     @Query("SELECT * FROM health_metric_snapshots ORDER BY dateMillis DESC")
     suspend fun getAll(): List<HealthMetricSnapshotEntity>
 
+    @Query(
+        "SELECT MIN(dateMillis) FROM health_metric_snapshots WHERE metricType = :metricType",
+    )
+    suspend fun oldestDateMillis(metricType: String): Long?
+
+    @Query(
+        "DELETE FROM health_metric_snapshots WHERE metricType = :metricType " +
+            "AND dateMillis >= :fromMillis AND dateMillis <= :toMillis",
+    )
+    suspend fun deleteTypeInRange(metricType: String, fromMillis: Long, toMillis: Long)
+
     @Query("DELETE FROM health_metric_snapshots")
     suspend fun deleteAll()
 }

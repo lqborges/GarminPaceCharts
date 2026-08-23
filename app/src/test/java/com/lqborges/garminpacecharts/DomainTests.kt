@@ -226,6 +226,30 @@ class WellnessMetricParserTest {
     }
 
     @Test
+    fun restingHrSeriesFromUserStats_readsMetricsMap() {
+        val json = """
+            {
+              "allMetrics": {
+                "metricsMap": {
+                  "WELLNESS_RESTING_HEART_RATE": [
+                    {"calendarDate": "2024-01-02", "value": 58},
+                    {"calendarDate": "2024-01-03", "value": 56},
+                    {"calendarDate": "2024-01-04", "value": 0}
+                  ]
+                }
+              }
+            }
+        """.trimIndent()
+        val series = WellnessMetricParser.restingHrSeriesFromUserStats(
+            kotlinx.serialization.json.Json.parseToJsonElement(json),
+        )
+        assertEquals(2, series.size)
+        assertEquals(java.time.LocalDate.parse("2024-01-02"), series[0].date)
+        assertEquals(58.0, series[0].value, 0.01)
+        assertEquals(56.0, series[1].value, 0.01)
+    }
+
+    @Test
     fun healthAssessment_includesVo2MaxFromMetrics() {
         val metrics = listOf(
             com.lqborges.garminpacecharts.domain.model.HealthMetricPoint(
@@ -453,6 +477,25 @@ class ChartDataBuilderTest {
         val rank = WellnessStatsBuilder.weeklyValueRank(metrics, "RESTING_HR", now, lowerIsBetter = true)
         assertNotNull(rank)
         assertEquals(1, rank!!.rank)
+        assertEquals(3, rank.totalWeeks)
+    }
+
+    @Test
+    fun weeklyRhrRank_usesAllHistoricalWeeks() {
+        val now = LocalDateTime.parse("2026-07-07T08:00:00")
+        val metrics = buildList {
+            add(metric("RESTING_HR", "2026-07-06T00:00:00", 50.0))
+            add(metric("RESTING_HR", "2026-07-07T00:00:00", 52.0))
+            for (weekOffset in 1..8) {
+                val day = LocalDateTime.parse("2026-07-07T00:00:00").minusWeeks(weekOffset.toLong())
+                add(metric("RESTING_HR", day.toString(), 60.0 + weekOffset))
+                add(metric("RESTING_HR", day.plusDays(1).toString(), 61.0 + weekOffset))
+            }
+        }
+        val rank = WellnessStatsBuilder.weeklyValueRank(metrics, "RESTING_HR", now, lowerIsBetter = true)
+        assertNotNull(rank)
+        assertEquals(1, rank!!.rank)
+        assertEquals(9, rank.totalWeeks)
     }
 
     private fun weekBucket(year: Int, month: Int, week: Int, label: String) =
@@ -481,4 +524,54 @@ class ChartDataBuilderTest {
             paceMinPerKm = pace,
             paceSource = PaceSource.IMPORTED,
         )
+}
+
+class WellnessHistoryPlannerTest {
+    @Test
+    fun backfillRange_startsBeforeWellnessWindowWhenNothingStored() {
+        val range = WellnessHistoryPlanner.backfillRange(
+            fetchEnd = java.time.LocalDate.parse("2026-07-07"),
+            oldestStored = null,
+            wellnessLookbackDays = 14,
+            historyDays = 365L * 5,
+        )
+        assertNotNull(range)
+        assertEquals(java.time.LocalDate.parse("2021-07-08"), range!!.start)
+        assertEquals(java.time.LocalDate.parse("2026-06-22"), range.end)
+    }
+
+    @Test
+    fun backfillRange_nullWhenHistoryAlreadyComplete() {
+        val range = WellnessHistoryPlanner.backfillRange(
+            fetchEnd = java.time.LocalDate.parse("2026-07-07"),
+            oldestStored = java.time.LocalDate.parse("2021-07-07"),
+            wellnessLookbackDays = 14,
+            historyDays = 365L * 5,
+        )
+        assertNull(range)
+    }
+
+    @Test
+    fun chunks_walkBackwardInRequestedSize() {
+        val range = WellnessHistoryPlanner.DateRange(
+            start = java.time.LocalDate.parse("2026-06-01"),
+            end = java.time.LocalDate.parse("2026-06-30"),
+        )
+        val chunks = WellnessHistoryPlanner.chunks(range, chunkDays = 10)
+        assertEquals(3, chunks.size)
+        assertEquals(java.time.LocalDate.parse("2026-06-21"), chunks[0].start)
+        assertEquals(java.time.LocalDate.parse("2026-06-30"), chunks[0].end)
+        assertEquals(java.time.LocalDate.parse("2026-06-01"), chunks.last().start)
+        assertEquals(java.time.LocalDate.parse("2026-06-10"), chunks.last().end)
+    }
+
+    @Test
+    fun contains_rejectsDatesOutsideChunk() {
+        val chunk = WellnessHistoryPlanner.DateRange(
+            start = java.time.LocalDate.parse("2026-01-01"),
+            end = java.time.LocalDate.parse("2026-01-28"),
+        )
+        assertTrue(WellnessHistoryPlanner.contains(chunk, java.time.LocalDate.parse("2026-01-15")))
+        assertFalse(WellnessHistoryPlanner.contains(chunk, java.time.LocalDate.parse("2026-07-01")))
+    }
 }

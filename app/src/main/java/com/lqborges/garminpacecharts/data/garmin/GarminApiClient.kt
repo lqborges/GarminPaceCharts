@@ -96,6 +96,18 @@ class GarminApiClient(
             connectApiRaw("/metrics-service/metrics/maxmet/daily/$date/$date")
         }.getOrNull()
 
+    /**
+     * Bulk resting-HR history for a date range (metricId 60).
+     * Prefer this over per-day usersummary calls when backfilling ranking history.
+     */
+    fun fetchRestingHrRange(fromDate: LocalDate, untilDate: LocalDate): JsonObject? =
+        runCatching {
+            connectApiRaw(
+                "/userstats-service/wellness/daily/${encodedDisplayName()}" +
+                    "?fromDate=$fromDate&untilDate=$untilDate&metricId=60",
+            ).jsonObject
+        }.getOrNull()
+
     private fun encodedDisplayName(): String {
         val name = requireDisplayName()
         return URLEncoder.encode(name, StandardCharsets.UTF_8.toString())
